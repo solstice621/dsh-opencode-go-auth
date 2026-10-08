@@ -1,0 +1,108 @@
+{
+  "name": "dsh-opencode-go-auth",
+  "version": "0.1.0",
+  "description": "OpenCode Go subscription auth for DeepSeek Harness Desktop, with native account and usage UI",
+  "type": "module",
+  "license": "MIT",
+  "main": "./src/index.js",
+  "author": "solstice621",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/solstice621/dsh-opencode-go-auth.git"
+  },
+  "homepage": "https://github.com/solstice621/dsh-opencode-go-auth#readme",
+  "bugs": {
+    "url": "https://github.com/solstice621/dsh-opencode-go-auth/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "opencode",
+    "opencode-go",
+    "zen",
+    "auth",
+    "quota"
+  ],
+  "icon": "./icon.svg",
+  "exports": {
+    ".": "./src/index.js",
+    "./client": "./src/client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": [
+    "src",
+    "locale",
+    "icon.svg",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.4",
+    "@deepseek-ai/schemastery": "~3.18.4",
+    "@deepseek-ai/dsh-llm": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-llm-pi-ai": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-http-proxy": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-connection": "0.2.0-rc.2",
+    "@earendil-works/pi-ai": "0.87.1"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "external": [
+        "react"
+      ],
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-settings-general"
+      ]
+    }
+  },
+  "disclosure": {
+    "cloud": true,
+    "network": [
+      "https://opencode.ai"
+    ],
+    "offlineMode": false,
+    "apiKeys": [
+      "OPENCODE_GO_API_KEY"
+    ],
+    "credentials": {
+      "type": "OpenCode Go API key",
+      "storage": "Harness credential store, environment, or the local OpenCode CLI auth.json",
+      "logged": false,
+      "uiReceivesTokens": false
+    },
+    "permissions": {
+      "filesystemRead": [
+        "Configured OpenCode CLI auth.json",
+        "Model metadata cache under ~/.dsh/cache/dsh-opencode-go-auth or configured modelCachePath"
+      ],
+      "filesystemWrite": [
+        "Harness credential store through the credentials service",
+        "Model metadata cache under ~/.dsh/cache/dsh-opencode-go-auth or configured modelCachePath"
+      ],
+      "process": [
+        "macOS scutil --proxy"
+      ],
+      "network": [
+        "OpenCode Go usage and model catalog reads on opencode.ai"
+      ]
+    },
+    "retention": "Session UI state; sanitized key-scoped model metadata persisted locally until replaced or removed",
+    "jurisdiction": []
+  }
+}
