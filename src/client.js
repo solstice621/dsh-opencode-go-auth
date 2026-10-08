@@ -187,7 +187,7 @@ window.__ModuleLoader__.load({
             `${quota.cached ? '上次更新' : '更新于'} ${date(quota.fetchedAt)} · 由 OpenCode Go 订阅返回`,
             quota.cached && busy === 'quota' ? ' · 正在刷新…' : quota.cached ? ' · 刷新未完成' : ''),
         ),
-        h('div', { className: 'card' },
+        state?.showModelSync !== false && h('div', { className: 'card' },
           h('div', { className: 'row' }, h('h3', null, '模型自动同步'), h('button', { className: 'text-button', disabled: locked || !enabled || !state?.connected || state?.models?.refreshing, onClick: () => operation('models') }, busy === 'models' || state?.models?.refreshing ? '同步中…' : '刷新模型')),
           h('p', { className: 'muted small', style: { marginTop: 14 } }, !enabled ? '连接已停用，自动同步已暂停。' : `启动时同步，每 ${state?.models?.intervalMinutes ?? 360} 分钟自动刷新；更换 API key 后重新同步。`),
           state?.models && h('p', { className: 'small muted', style: { marginTop: 8 } }, `当前 ${state.models.totalModels} 个模型 · ${state.models.source === 'opencode' ? 'OpenCode Go 官方目录' : state.models.source === 'cache' ? '最近成功的缓存' : '内置备用目录'} · 最近同步：${date(state.models.lastSyncAt)}`),

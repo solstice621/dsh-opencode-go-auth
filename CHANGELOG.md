@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1
+
+- Add `showModelSync` (default `true`); set it to `false` to drop the model-catalog card, leaving account and usage on the page. The preference is reported through `state` rather than read from raw configuration.
+- Document the settings-page order: account, usage, then the model catalog.
+
 ## 0.2.0
 
 - Show the last successful usage reading immediately when the settings page opens, then refresh it behind the user instead of leaving the card empty for the round trip.

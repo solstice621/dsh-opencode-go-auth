@@ -25,6 +25,7 @@ export const Config = Schema.object({
   apiKeyEnv: Schema.string().default(DEFAULT_API_KEY_ENV).description('Credential reference that holds the API key'),
   baseUrl: Schema.string().default(DEFAULT_BASE_URL).description('OpenCode Zen Go API root'),
   authFile: Schema.string().description('Local OpenCode CLI auth.json; defaults to ~/.local/share/opencode/auth.json'),
+  showModelSync: Schema.boolean().default(true).description('Show the model-catalog card under the quota card on the settings page'),
   modelRefreshMinutes: Schema.number().min(5).max(10080).default(360).description('Automatically refresh the model catalog at this interval'),
   modelCachePath: Schema.string().description('Optional model metadata cache path; defaults to ~/.dsh/cache/dsh-opencode-go-auth'),
   quotaCachePath: Schema.string().description('Optional last-usage cache path; defaults to ~/.dsh/cache/dsh-opencode-go-auth'),
@@ -136,6 +137,7 @@ export async function apply(ctx, config) {
   const controller = new AuthController({
     source, enabled, beforeAuth: () => bridge.ensure(), modelSync,
     quotaStore: quotaCacheStore(config.quotaCachePath ?? quotaCacheFile(baseUrl)),
+    showModelSync: config.showModelSync !== false,
     fetchUsageImpl: options => fetchUsage({ ...options, timeoutMs }),
   });
   ctx.effect(() => () => controller.dispose());

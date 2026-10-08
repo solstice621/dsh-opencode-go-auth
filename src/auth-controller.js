@@ -6,8 +6,8 @@ import { OpenCodeGoError, fetchUsage, maskApiKey, keyFingerprint } from './openc
  * connected just because the previous one worked.
  */
 export class AuthController {
-  constructor({ source, enabled = true, beforeAuth = async () => {}, modelSync, quotaStore, fetchUsageImpl = fetchUsage, now = Date.now } = {}) {
-    Object.assign(this, { source, enabled, beforeAuth, modelSync, quotaStore, fetchUsage: fetchUsageImpl, now });
+  constructor({ source, enabled = true, beforeAuth = async () => {}, modelSync, quotaStore, showModelSync = true, fetchUsageImpl = fetchUsage, now = Date.now } = {}) {
+    Object.assign(this, { source, enabled, beforeAuth, modelSync, quotaStore, showModelSync, fetchUsage: fetchUsageImpl, now });
   }
 
   isEnabled() { return (typeof this.enabled === 'function' ? this.enabled() : this.enabled) !== false; }
@@ -19,11 +19,13 @@ export class AuthController {
 
   async getState() {
     const enabled = this.isEnabled();
+    // A layout preference, reported so the page never has to read the raw config.
+    const showModelSync = this.showModelSync !== false;
     let auth;
     try { auth = await this.source.read(); } catch (error) {
       this.verification = undefined;
       this.modelSync?.observeKey(undefined);
-      return { enabled, configured: false, connected: false, credential: null, verifiedAt: null,
+      return { enabled, showModelSync, configured: false, connected: false, credential: null, verifiedAt: null,
         error: error.code ?? 'OPENCODE_GO_AUTH_REQUIRED', models: this.modelSync?.state() ?? null };
     }
     if (this.modelSync?.observeKey(auth.key)) this.modelSync.tick(true).catch(() => {});
@@ -32,7 +34,7 @@ export class AuthController {
     const describe = typeof this.source.describe === 'function' ? await this.source.describe().catch(() => undefined) : undefined;
     const failed = this.verification?.ok === false;
     return {
-      enabled, configured: true, connected: !failed,
+      enabled, showModelSync, configured: true, connected: !failed,
       credential: {
         id: keyFingerprint(auth.key).slice(0, 16),
         label: maskApiKey(auth.key),

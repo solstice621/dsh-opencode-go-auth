@@ -39,7 +39,7 @@
 3. 输入以下 GitHub 包地址，或从 Releases 下载 `.tgz` 后填写其绝对路径：
 
    ```text
-   github:solstice621/dsh-opencode-go-auth#v0.2.0
+   github:solstice621/dsh-opencode-go-auth#v0.2.1
    ```
 
 4. 安装并启用插件，然后刷新页面或完全退出并重新打开 Harness。
@@ -92,6 +92,7 @@
 | `apiKeyEnv` | `OPENCODE_GO_API_KEY` | 保存 / 读取 key 的凭据引用名 |
 | `baseUrl` | `https://opencode.ai/zen/go/v1` | OpenCode Zen Go 接口根地址 |
 | `authFile` | `~/.local/share/opencode/auth.json` | 本机 OpenCode CLI 登录文件 |
+| `showModelSync` | `true` | 是否在设置页显示模型目录卡片（账户与用量始终显示） |
 | `modelRefreshMinutes` | `360` | 模型目录自动刷新间隔 |
 | `modelCachePath` | `~/.dsh/cache/dsh-opencode-go-auth` | 模型目录缓存位置 |
 | `quotaCachePath` | `~/.dsh/cache/dsh-opencode-go-auth` | 上次用量快照位置 |

@@ -180,3 +180,11 @@ test('a quota read survives an unwritable cache', async () => {
   const controller = new AuthController({ source: fakeSource(), quotaStore: { read: async () => null, write: async () => { throw Error('disk full'); }, clear: async () => {} }, fetchUsageImpl: async () => WINDOWS });
   assert.deepEqual((await controller.usage()).windows, WINDOWS);
 });
+
+test('the settings layout preference is reported without exposing raw configuration', async () => {
+  assert.equal((await new AuthController({ source: fakeSource() }).getState()).showModelSync, true);
+  assert.equal((await new AuthController({ source: fakeSource(), showModelSync: false }).getState()).showModelSync, false);
+  const offline = new AuthController({ source: noKeySource(), showModelSync: false });
+  assert.equal((await offline.getState()).showModelSync, false);
+  assert.equal((await authRpcHandler(new AuthController({ source: fakeSource(), showModelSync: false }))('state', {})).value.showModelSync, false);
+});
