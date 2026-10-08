@@ -9,6 +9,7 @@ import { ApiKeySource, DEFAULT_API_KEY_ENV } from './api-key-source.js';
 import { SystemProxyBridge } from './system-proxy.js';
 import { AuthController, authRpcHandler } from './auth-controller.js';
 import { ModelSync, modelCacheStore } from './model-sync.js';
+import { quotaCacheFile, quotaCacheStore } from './quota-cache.js';
 import { tagModels } from './model-catalog.js';
 import { DEFAULT_BASE_URL, fetchModelIds, fetchUsage } from './opencode-api.js';
 
@@ -16,7 +17,7 @@ export const name = 'dsh-opencode-go-auth';
 export const inject = ['llm', 'connection'];
 export const PROVIDER = 'opencode-go-subscription';
 export const ROUTE_PREFIX = '/api/opencode-go-auth';
-export const ENDPOINTS = ['state', 'refresh', 'quota', 'login', 'logout', 'models'];
+export const ENDPOINTS = ['state', 'refresh', 'quota', 'cached', 'login', 'logout', 'models'];
 
 export const Config = Schema.object({
   enabled: Schema.boolean().default(true).description('Enable the OpenCode Go connection in Harness').volatile(),
@@ -26,6 +27,7 @@ export const Config = Schema.object({
   authFile: Schema.string().description('Local OpenCode CLI auth.json; defaults to ~/.local/share/opencode/auth.json'),
   modelRefreshMinutes: Schema.number().min(5).max(10080).default(360).description('Automatically refresh the model catalog at this interval'),
   modelCachePath: Schema.string().description('Optional model metadata cache path; defaults to ~/.dsh/cache/dsh-opencode-go-auth'),
+  quotaCachePath: Schema.string().description('Optional last-usage cache path; defaults to ~/.dsh/cache/dsh-opencode-go-auth'),
   requestTimeoutMs: Schema.number().min(1000).max(120000).default(20000).description('Bound on one OpenCode Go request'),
   useSystemProxy: Schema.boolean().default(process.platform === 'darwin').description('Use the active macOS HTTP proxy when the GUI Host has no explicit proxy'),
 });
@@ -133,6 +135,7 @@ export async function apply(ctx, config) {
 
   const controller = new AuthController({
     source, enabled, beforeAuth: () => bridge.ensure(), modelSync,
+    quotaStore: quotaCacheStore(config.quotaCachePath ?? quotaCacheFile(baseUrl)),
     fetchUsageImpl: options => fetchUsage({ ...options, timeoutMs }),
   });
   ctx.effect(() => () => controller.dispose());

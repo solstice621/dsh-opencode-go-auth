@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0
+
+- Show the last successful usage reading immediately when the settings page opens, then refresh it behind the user instead of leaving the card empty for the round trip.
+- Persist a sanitized, key-scoped usage snapshot; another key's snapshot is never reused, and 移除授权 deletes it.
+- Label a restored reading as `上次更新` and keep it on screen when a refresh fails, with the failure reported beside it rather than replacing the numbers.
+- Add `quotaCachePath` and a `cached` RPC that answers from disk without a network call.
+
 ## 0.1.0
 
 首个版本，对齐 `dsh-openai-auth` 的结构与交互，改为面向 OpenCode Go 订阅。

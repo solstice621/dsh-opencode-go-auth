@@ -131,3 +131,52 @@ test('the RPC handler maps unknown failures to a generic code', async () => {
   assert.equal(result.ok, false);
   assert.equal(result.error.code, 'OPENCODE_GO_OPERATION_FAILED');
 });
+
+test('a successful usage read is remembered for that key and reused without the network', async () => {
+  const writes = [];
+  const store = { value: null, cleared: 0, read: async () => store.value, write: async value => { writes.push(value); store.value = value; }, clear: async () => { store.cleared++; store.value = null; } };
+  let fetches = 0;
+  const controller = new AuthController({ source: fakeSource(), quotaStore: store, now: () => 7000, fetchUsageImpl: async () => { fetches++; return WINDOWS; } });
+  const value = await controller.usage();
+  assert.deepEqual(value.windows, WINDOWS);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].version, 1);
+  assert.equal(writes[0].fetchedAt, 7000);
+  assert.equal(writes[0].keyHash, keyFingerprint(KEY));
+  assert.ok(!JSON.stringify(writes[0]).includes(KEY));
+
+  const fetchesAfterUsage = fetches;
+  const cached = await controller.cachedUsage();
+  assert.equal(cached.cached, true);
+  assert.equal(cached.fetchedAt, 7000);
+  assert.deepEqual(cached.windows, WINDOWS);
+  assert.equal(fetches, fetchesAfterUsage);
+
+  await controller.logout();
+  assert.equal(store.cleared, 1);
+  assert.equal(await controller.cachedUsage(), null);
+});
+
+test('another key’s snapshot is never shown as this subscription’s usage', async () => {
+  const store = { value: { version: 1, keyHash: keyFingerprint('oc_sk_someone_else'), fetchedAt: 1, windows: WINDOWS }, read: async () => store.value, write: async () => {} };
+  const controller = new AuthController({ source: fakeSource(), quotaStore: store, fetchUsageImpl: async () => WINDOWS });
+  assert.equal(await controller.cachedUsage(), null);
+});
+
+test('the cached RPC answers from an empty cache without a network call', async () => {
+  let fetches = 0;
+  const controller = new AuthController({ source: fakeSource(), quotaStore: { read: async () => null, write: async () => {}, clear: async () => {} }, fetchUsageImpl: async () => { fetches++; return WINDOWS; } });
+  const handle = authRpcHandler(controller);
+  const empty = await handle('cached', {});
+  assert.equal(empty.ok, true);
+  assert.equal(empty.value, null);
+  assert.equal(fetches, 0);
+  assert.equal((await handle('cached', { key: 'x' })).error.code, 'OPENCODE_GO_BAD_REQUEST');
+  const bare = new AuthController({ source: fakeSource(), fetchUsageImpl: async () => WINDOWS });
+  assert.equal(await bare.cachedUsage(), null);
+});
+
+test('a quota read survives an unwritable cache', async () => {
+  const controller = new AuthController({ source: fakeSource(), quotaStore: { read: async () => null, write: async () => { throw Error('disk full'); }, clear: async () => {} }, fetchUsageImpl: async () => WINDOWS });
+  assert.deepEqual((await controller.usage()).windows, WINDOWS);
+});

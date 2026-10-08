@@ -6,8 +6,8 @@ import { OpenCodeGoError, fetchUsage, maskApiKey, keyFingerprint } from './openc
  * connected just because the previous one worked.
  */
 export class AuthController {
-  constructor({ source, enabled = true, beforeAuth = async () => {}, modelSync, fetchUsageImpl = fetchUsage, now = Date.now } = {}) {
-    Object.assign(this, { source, enabled, beforeAuth, modelSync, fetchUsage: fetchUsageImpl, now });
+  constructor({ source, enabled = true, beforeAuth = async () => {}, modelSync, quotaStore, fetchUsageImpl = fetchUsage, now = Date.now } = {}) {
+    Object.assign(this, { source, enabled, beforeAuth, modelSync, quotaStore, fetchUsage: fetchUsageImpl, now });
   }
 
   isEnabled() { return (typeof this.enabled === 'function' ? this.enabled() : this.enabled) !== false; }
@@ -51,11 +51,29 @@ export class AuthController {
     try {
       const windows = await this.fetchUsage({ baseUrl: this.source.baseUrl, apiKey: auth.key });
       this.verify(auth.key, { ok: true });
-      return { windows, fetchedAt: this.now() };
+      const value = { windows, fetchedAt: this.now() };
+      // Remember it for the next page load; a failed write never fails the read.
+      try { await this.quotaStore?.write({ version: 1, keyHash: keyFingerprint(auth.key), ...value }); } catch { /* cache only */ }
+      return value;
     } catch (error) {
       if (error instanceof OpenCodeGoError) this.verify(auth.key, { ok: false, code: error.code });
       throw error;
     }
+  }
+
+  /**
+   * The last successful read for the configured key. Touches one small file and
+   * no network, so the settings page can paint the previous usage immediately
+   * and refresh behind it.
+   */
+  async cachedUsage() {
+    if (!this.quotaStore) return null;
+    let auth;
+    try { auth = await this.source.read(); } catch { return null; }
+    const cached = await this.quotaStore.read();
+    // Another key's snapshot is not this subscription's usage.
+    if (!cached || cached.keyHash !== keyFingerprint(auth.key)) return null;
+    return { windows: cached.windows, fetchedAt: cached.fetchedAt, cached: true };
   }
 
   /** Validate first, then persist: a rejected key never reaches the credential store. */
@@ -79,6 +97,8 @@ export class AuthController {
 
   async logout() {
     await this.source.clear();
+    // Derived data leaves with the credential it was read for.
+    try { await this.quotaStore?.clear(); } catch { /* cache only */ }
     this.verification = undefined;
     this.modelSync?.observeKey(undefined);
     return this.getState();
@@ -100,7 +120,7 @@ export class AuthController {
   dispose() { this.disposed = true; }
 }
 
-const EMPTY = new Set(['state', 'refresh', 'quota', 'logout', 'models']);
+const EMPTY = new Set(['state', 'refresh', 'quota', 'cached', 'logout', 'models']);
 
 export function authRpcHandler(controller) {
   return async (endpoint, payload) => {
@@ -114,6 +134,7 @@ export function authRpcHandler(controller) {
       state: () => controller.getState(),
       refresh: () => controller.refresh(),
       quota: () => controller.usage(),
+      cached: () => controller.cachedUsage(),
       login: () => controller.login(payload.key),
       logout: () => controller.logout(),
       models: () => controller.refreshModels(),

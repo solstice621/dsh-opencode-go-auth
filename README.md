@@ -14,6 +14,7 @@
 | 凭据托管 | key 存入 Harness 凭据存储的 `OPENCODE_GO_API_KEY`，配置文件里不出现明文 |
 | 复用已有登录 | 识别本机 OpenCode CLI 的 `auth.json`，无需重复粘贴 |
 | 查看用量 | 显示官方返回的 5 小时 / 每周 / 每月三个额度窗口、剩余比例与重置时间 |
+| 秒开额度 | 打开页面先显示上次读取的用量，再在后台刷新 |
 | 订阅校验 | 分别识别 key 无效（401）与未订阅 Go（403），并给出对应提示 |
 | 管理连接 | 启用或停用 Harness 中的 OpenCode Go 连接，并保存选择 |
 | 隐藏 key | 录屏、演示或截图前隐藏 key 标签 |
@@ -38,7 +39,7 @@
 3. 输入以下 GitHub 包地址，或从 Releases 下载 `.tgz` 后填写其绝对路径：
 
    ```text
-   github:solstice621/dsh-opencode-go-auth#v0.1.0
+   github:solstice621/dsh-opencode-go-auth#v0.2.0
    ```
 
 4. 安装并启用插件，然后刷新页面或完全退出并重新打开 Harness。
@@ -64,6 +65,12 @@
 
 页面显示 key 标签（形如 `oc_sk_030…b5Cz`，不含完整值）、来源、最近验证时间和订阅状态。来自凭据存储的 key 可以随时更换或移除。
 
+### 查看用量
+
+打开页面时，插件先显示**上次成功读取的用量快照**，同时在后台请求官方接口；返回后数字自动替换。这样打开设置的瞬间就能看到额度，而不是先空着等一次网络往返。
+
+也可点击「刷新额度」手动读取。显示缓存时时间行标注为「上次更新」；刷新失败会保留原有数字并在下方给出原因，而不是把额度清空。快照按 API key 隔离，保存在 `~/.dsh/cache/dsh-opencode-go-auth/<baseUrl 哈希>/quota.json`，只含三个窗口本身，不含 key；「移除授权」会一并删除它（可用 `quotaCachePath` 改位置）。
+
 ### 登录与更换
 
 点「登录 OpenCode Go」或「更换 API key」展开输入框。插件会先用该 key 调一次额度接口：
@@ -87,6 +94,7 @@
 | `authFile` | `~/.local/share/opencode/auth.json` | 本机 OpenCode CLI 登录文件 |
 | `modelRefreshMinutes` | `360` | 模型目录自动刷新间隔 |
 | `modelCachePath` | `~/.dsh/cache/dsh-opencode-go-auth` | 模型目录缓存位置 |
+| `quotaCachePath` | `~/.dsh/cache/dsh-opencode-go-auth` | 上次用量快照位置 |
 | `requestTimeoutMs` | `20000` | 单次请求超时 |
 | `useSystemProxy` | macOS 为 `true` | Host 未显式配置代理时使用系统 HTTP/HTTPS 代理 |
 

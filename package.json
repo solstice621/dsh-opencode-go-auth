@@ -1,6 +1,6 @@
 {
   "name": "dsh-opencode-go-auth",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "OpenCode Go subscription auth for DeepSeek Harness Desktop, with native account and usage UI",
   "type": "module",
   "license": "MIT",
@@ -89,11 +89,13 @@
     "permissions": {
       "filesystemRead": [
         "Configured OpenCode CLI auth.json",
-        "Model metadata cache under ~/.dsh/cache/dsh-opencode-go-auth or configured modelCachePath"
+        "Model metadata cache under ~/.dsh/cache/dsh-opencode-go-auth or configured modelCachePath",
+        "Last-usage snapshot under ~/.dsh/cache/dsh-opencode-go-auth or configured quotaCachePath"
       ],
       "filesystemWrite": [
         "Harness credential store through the credentials service",
-        "Model metadata cache under ~/.dsh/cache/dsh-opencode-go-auth or configured modelCachePath"
+        "Model metadata cache under ~/.dsh/cache/dsh-opencode-go-auth or configured modelCachePath",
+        "Last-usage snapshot under ~/.dsh/cache/dsh-opencode-go-auth or configured quotaCachePath"
       ],
       "process": [
         "macOS scutil --proxy"
@@ -102,7 +104,7 @@
         "OpenCode Go usage and model catalog reads on opencode.ai"
       ]
     },
-    "retention": "Session UI state; sanitized key-scoped model metadata persisted locally until replaced or removed",
+    "retention": "Session UI state; sanitized key-scoped model metadata and the last usage snapshot persisted locally until replaced or removed",
     "jurisdiction": []
   }
 }
