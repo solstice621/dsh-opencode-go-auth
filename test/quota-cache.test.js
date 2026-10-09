@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, writeFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { normalizeCachedWindows, quotaCacheFile, quotaCacheStore } from '../src/quota-cache.js';
@@ -61,4 +61,32 @@ test('cached windows are sanitized and clamped', () => {
   assert.equal(normalized[1].nameEn, 'Monthly window');
   assert.throws(() => normalizeCachedWindows(new Array(11).fill({ id: 'x' })), /Invalid quota cache/);
   assert.throws(() => normalizeCachedWindows('nope'), /Invalid quota cache/);
+});
+
+test('a lifecycle/key guard is rechecked after writing temporary data and preserves the old snapshot', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'opencode-go-quota-guard-'));
+  const store = quotaCacheStore(join(dir, 'quota.json'));
+  const old = { version: 1, keyHash: keyFingerprint(KEY), fetchedAt: 1000, windows: windows() };
+  await store.write(old);
+  let guards = 0;
+  const committed = await store.write({ ...old, fetchedAt: 2000 }, { shouldCommit: () => ++guards === 1 });
+  assert.equal(committed, false);
+  assert.equal(guards, 2);
+  assert.equal((await store.read()).fetchedAt, 1000);
+  assert.deepEqual(await readdir(dir), ['quota.json']);
+});
+
+test('aborting at the commit guard leaves the last successful disk snapshot and no temporary file', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'opencode-go-quota-abort-'));
+  const store = quotaCacheStore(join(dir, 'quota.json'));
+  const old = { version: 1, keyHash: keyFingerprint(KEY), fetchedAt: 1000, windows: windows() };
+  await store.write(old);
+  const abort = new AbortController();
+  let guards = 0;
+  await assert.rejects(store.write({ ...old, fetchedAt: 2000 }, {
+    signal: abort.signal,
+    shouldCommit: () => { if (++guards === 2) abort.abort(); return true; },
+  }), error => error.name === 'AbortError');
+  assert.equal((await store.read()).fetchedAt, 1000);
+  assert.deepEqual(await readdir(dir), ['quota.json']);
 });

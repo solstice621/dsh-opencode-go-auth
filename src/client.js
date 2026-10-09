@@ -86,22 +86,32 @@ window.__ModuleLoader__.load({
         if (previousCredential.current !== identity) { setQuota(null); setQuotaError(null); previousCredential.current = identity; }
         setState(value);
       }
+      function acceptQuota(value, identity = previousCredential.current) {
+        if (!active.current || !value?.windows?.length || !Number.isFinite(value.fetchedAt)
+          || !identity || previousCredential.current !== identity || value.credentialId !== identity) return false;
+        setQuota(previous => {
+          if (!active.current || previousCredential.current !== identity) return previous;
+          // Slow disk polling must never downgrade a newer manual/network reading.
+          if (previous && (previous.fetchedAt > value.fetchedAt
+            || (previous.fetchedAt === value.fetchedAt && value.cached))) return previous;
+          return value;
+        });
+        return true;
+      }
       async function loadQuota() {
+        const identity = previousCredential.current;
         if (active.current) { setBusy('quota'); setQuotaError(null); }
         // A cached reading stays on screen while the refresh runs; only a failure
         // with nothing to show falls back to the placeholder text.
-        try { const value = await call('quota'); if (active.current) setQuota(value); }
-        catch (err) { if (active.current) setQuotaError(errors[err.code] ?? '额度读取失败，请检查网络后重试。'); }
+        try { acceptQuota(await call('quota'), identity); }
+        catch (err) { if (active.current && previousCredential.current === identity) setQuotaError(errors[err.code] ?? '额度读取失败，请检查网络后重试。'); }
         finally { if (active.current) setBusy(null); }
       }
-      // Paint the previous reading first, then refresh it behind the user.
+      // Paint/poll only disk data; background network refresh belongs to the backend.
       async function showCachedQuota() {
-        try {
-          const value = await call('cached');
-          if (!active.current || !value?.windows?.length) return false;
-          setQuota(value);
-          return true;
-        } catch { return false; }
+        const identity = previousCredential.current;
+        try { return acceptQuota(await call('cached'), identity); }
+        catch { return false; } // Poll failures never erase a good reading.
       }
       async function sync() { const value = await call('state'); accept(value); return value; }
       React.useEffect(() => {
@@ -119,19 +129,24 @@ window.__ModuleLoader__.load({
         return () => { active.current = false; window.removeEventListener('focus', focus); };
       }, []);
       React.useEffect(() => {
-        if (!state?.models) return;
         // Poll only local display state; network discovery has its own TTL.
-        const timer = window.setInterval(() => { sync().catch(() => {}); }, state.models.refreshing ? 1500 : 30000);
+        const timer = window.setInterval(() => { sync().catch(() => {}); }, state?.models?.refreshing ? 1500 : 30000);
         return () => window.clearInterval(timer);
       }, [state?.models?.refreshing]);
+      React.useEffect(() => {
+        // Observe backend quota refresh even when this page stays open for hours.
+        const timer = window.setInterval(() => { showCachedQuota(); }, 30000);
+        return () => window.clearInterval(timer);
+      }, []);
 
       async function operation(method, payload) {
         setBusy(method); setError(null); setNotice(null);
         try {
           const value = await call(method, payload);
+          if (!active.current) return;
           accept(value);
-          if (method === 'refresh') setNotice('已重新读取订阅额度。');
-          if (method === 'login') { setNotice('已保存 API key，OpenCode Go 授权可用。'); setEditing(false); setDraft(''); if (value.windows) setQuota({ windows: value.windows, fetchedAt: value.fetchedAt }); }
+          if (method === 'refresh') { setNotice('已重新读取订阅额度。'); acceptQuota(value); setQuotaError(null); }
+          if (method === 'login') { setNotice('已保存 API key，OpenCode Go 授权可用。'); setEditing(false); setDraft(''); acceptQuota(value); setQuotaError(null); }
           if (method === 'logout') { setNotice('已移除保存的 API key。'); setQuota(null); }
           if (method === 'models') setNotice(`模型目录已同步，共 ${value.models?.totalModels ?? 0} 个模型。`);
         } catch (err) { setError(errors[err.code] ?? err.message ?? '操作未完成，请检查网络后重试。'); }
@@ -150,6 +165,7 @@ window.__ModuleLoader__.load({
       }
       const status = !state ? (busy === 'state' ? '读取中' : '未能读取') : !enabled ? '已停用' : state.connected ? '已连接' : '需要登录';
       const locked = Boolean(busy);
+      const quotaStatusError = quotaError ?? (state?.quotaSync?.error ? errors[state.quotaSync.error] ?? '后台额度刷新未完成，保留最近成功的数据。' : null);
       return h('div', { className: 'opencode-go-auth', 'aria-busy': locked },
         h('h2', null, 'OpenCode / Go'),
         h('p', { className: 'muted' }, '在 Harness 使用你的 OpenCode Go 订阅，并查看用量额度。'),
@@ -181,11 +197,12 @@ window.__ModuleLoader__.load({
           h('div', { className: 'row' }, h('h3', null, '用量额度'), h('button', { className: 'text-button', disabled: locked || !state?.connected, onClick: loadQuota }, busy === 'quota' ? '读取中…' : '刷新额度')),
           quota?.windows?.length
             ? h('div', { className: 'quota-grid' }, quota.windows.map(value => h(QuotaWindow, { key: value.id, value })))
-            : h('p', { className: 'muted', style: { marginTop: 14 } }, busy === 'quota' ? '正在读取 OpenCode Go 额度…' : quotaError ?? '连接账号后可读取额度。'),
-          quota?.windows?.length && quotaError && h('p', { className: 'small muted', style: { marginTop: 10 }, role: 'alert' }, quotaError),
+            : h('p', { className: 'muted', style: { marginTop: 14 } }, busy === 'quota' ? '正在读取 OpenCode Go 额度…' : quotaStatusError ?? '连接账号后可读取额度。'),
+          quota?.windows?.length && quotaStatusError && h('p', { className: 'small muted', style: { marginTop: 10 }, role: 'alert' }, quotaStatusError),
           quota && h('p', { className: 'small muted', style: { marginTop: 14 } },
             `${quota.cached ? '上次更新' : '更新于'} ${date(quota.fetchedAt)} · 由 OpenCode Go 订阅返回`,
-            quota.cached && busy === 'quota' ? ' · 正在刷新…' : quota.cached ? ' · 刷新未完成' : ''),
+            busy === 'quota' ? ' · 正在刷新…' : ''),
+          h('p', { className: 'small muted', style: { marginTop: 8 } }, !enabled ? '连接已停用，后台额度刷新已暂停。' : `Harness 运行时，后台每 ${state?.quotaSync?.intervalMinutes ?? 5} 分钟自动刷新额度；无需打开此页面。`),
         ),
         state?.showModelSync !== false && h('div', { className: 'card' },
           h('div', { className: 'row' }, h('h3', null, '模型自动同步'), h('button', { className: 'text-button', disabled: locked || !enabled || !state?.connected || state?.models?.refreshing, onClick: () => operation('models') }, busy === 'models' || state?.models?.refreshing ? '同步中…' : '刷新模型')),

@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile, mkdir, writeFile, rename, rm } from 'node:fs/promises';
+import { readFile, mkdir, writeFile, rm } from 'node:fs/promises';
+import { renameSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -50,11 +51,24 @@ export function quotaCacheStore(path) {
         return { version: 1, keyHash: data.keyHash, fetchedAt: data.fetchedAt, windows };
       } catch { return null; }
     },
-    async write(value) {
+    async write(value, { signal, shouldCommit = () => true } = {}) {
+      const allowed = async () => {
+        signal?.throwIfAborted();
+        const valid = await shouldCommit();
+        signal?.throwIfAborted();
+        return valid;
+      };
+      if (!await allowed()) return false;
       const temporary = `${path}.${randomUUID()}.tmp`;
       await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-      try { await writeFile(temporary, JSON.stringify(value), { mode: 0o600 }); await rename(temporary, path); }
-      finally { await rm(temporary, { force: true }); }
+      try {
+        await writeFile(temporary, JSON.stringify(value), { mode: 0o600, signal });
+        if (!await allowed()) return false;
+        signal?.throwIfAborted();
+        // No await between the final lifecycle/identity check and the atomic commit.
+        renameSync(temporary, path);
+        return true;
+      } finally { await rm(temporary, { force: true }); }
     },
     async clear() { await rm(path, { force: true }); },
   };

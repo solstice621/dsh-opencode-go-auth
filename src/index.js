@@ -10,6 +10,7 @@ import { SystemProxyBridge } from './system-proxy.js';
 import { AuthController, authRpcHandler } from './auth-controller.js';
 import { ModelSync, modelCacheStore } from './model-sync.js';
 import { quotaCacheFile, quotaCacheStore } from './quota-cache.js';
+import { QuotaSync } from './quota-sync.js';
 import { tagModels } from './model-catalog.js';
 import { DEFAULT_BASE_URL, fetchModelIds, fetchUsage } from './opencode-api.js';
 
@@ -28,6 +29,7 @@ export const Config = Schema.object({
   showModelSync: Schema.boolean().default(true).description('Show the model-catalog card under the quota card on the settings page'),
   modelRefreshMinutes: Schema.number().min(5).max(10080).default(360).description('Automatically refresh the model catalog at this interval'),
   modelCachePath: Schema.string().description('Optional model metadata cache path; defaults to ~/.dsh/cache/dsh-opencode-go-auth'),
+  quotaRefreshMinutes: Schema.number().min(1).max(1440).default(5).description('Automatically refresh quota data while Harness is running and this connection is enabled'),
   quotaCachePath: Schema.string().description('Optional last-usage cache path; defaults to ~/.dsh/cache/dsh-opencode-go-auth'),
   requestTimeoutMs: Schema.number().min(1000).max(120000).default(20000).description('Bound on one OpenCode Go request'),
   useSystemProxy: Schema.boolean().default(process.platform === 'darwin').description('Use the active macOS HTTP proxy when the GUI Host has no explicit proxy'),
@@ -141,6 +143,9 @@ export async function apply(ctx, config) {
     fetchUsageImpl: options => fetchUsage({ ...options, timeoutMs }),
   });
   ctx.effect(() => () => controller.dispose());
+  const quotaSync = new QuotaSync({ controller, intervalMinutes: config.quotaRefreshMinutes ?? 5 });
+  controller.quotaSync = quotaSync;
+  ctx.effect(() => () => quotaSync.dispose());
 
   const handle = authRpcHandler(controller);
   // Exact /api routes inherit Harness's authenticated Host/Origin boundary and
@@ -164,5 +169,7 @@ export async function apply(ctx, config) {
 
   // Model discovery never delays startup or replaces a working catalog on error.
   modelSync.start().catch(() => ctx.logger.warn('OpenCode Go model sync failed; the current catalog remains available.'));
+  // Process-owned DATA refresh: no settings page, code updater, daemon or launchd.
+  quotaSync.start().catch(() => ctx.logger.warn('OpenCode Go quota sync failed; the last successful snapshot remains available.'));
   ctx.logger.info('OpenCode Go subscription provider is available. Authentication is managed by this plugin.');
 }
