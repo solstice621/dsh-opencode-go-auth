@@ -27,7 +27,7 @@
 ## 兼容性与前提
 
 - 已验证：**macOS + DeepSeek Harness Desktop `0.2.0-rc.2` / `0.2.1-rc.2`**。
-- 依赖声明仅允许上述两个 Harness 版本，以及配套的 pi-ai `0.87.1` / `1.1.0`；其他版本仍需验证。
+- 依赖声明允许 Harness `0.2.0-rc.2` / `0.2.1-rc.2` / `0.2.1-rc.3`，以及配套的 pi-ai `0.87.1` / `1.1.0`；其他版本仍需验证。
 - 需要 **OpenCode Go 或 Go Plus 订阅**及对应 API key，在 [opencode.ai/auth](https://opencode.ai/auth) 订阅后复制。
 - 可选：本机安装 opencode CLI 并完成 `/connect`，插件会直接复用 `~/.local/share/opencode/auth.json`。
 - 当前只支持 `type: "api"` 形式的登录；OAuth 形式的条目会被忽略。
@@ -35,7 +35,9 @@
 
 ## 安装到桌面版
 
-Harness `0.2.1-rc.2` 需要包含 `0.2.2-local.2` 兼容性修复的提交或本地 `.tgz`。下方 `v0.1.0` 安装示例适用于 `0.2.0-rc.2`，不包含此修复；旧包会被新宿主标为不兼容，设置入口和接口也不会加载。
+Harness `0.2.1-rc.3` 需要包含 `0.2.2-local.3` 兼容性修复的提交；四个 Harness SDK 包在 rc.3 中同步升版，旧依赖声明会导致插件被拒绝加载。
+
+Harness `0.2.1-rc.2` 需要包含 `0.2.2-local.2` 兼容性修复的提交或本地 `.tgz`。下方旧版本安装示例适用于 `0.2.0-rc.2`，不包含此修复；旧包会被新宿主标为不兼容，设置入口和接口也不会加载。
 
 1. 取得 OpenCode Go API key（[opencode.ai/auth](https://opencode.ai/auth) → 订阅 Go / Go Plus → 复制 key）。
 2. 在 Harness 左侧打开「插件」→「添加插件」。
@@ -129,6 +131,9 @@ Harness `0.2.1-rc.2` 需要包含 `0.2.2-local.2` 兼容性修复的提交或本
 运行 `npm test`；分发前使用 `npm pack --ignore-scripts` 打包。
 
 2026-10-19 在 macOS、Harness Desktop `0.2.1-rc.2`、pi-ai `1.1.0` 下验证了 `0.2.2-local.2`：85 项测试通过；原生适配器可加载，桌面设置页及额度、模型刷新恢复；实际桌面后端的 `state`、`cached`、`quota`、`models` 返回成功。通过 `opencode-go-subscription` 调用精确模型 `deepseek-v4.1-flash`，流式返回 `OK` 并正常结束；测试后恢复原有默认模型。此次未重新登录、移除凭据或更换账号。
+
+2026-10-26：`0.2.2-local.3` 为四个 Harness SDK 依赖显式增加 `0.2.1-rc.3`，保留现有版本约束。使用桌面更新器取得的官方 rc.3 打包 SDK 验证：旧包的四项依赖均被拒绝，修复后依赖检查及原生适配器导入、精确模型查询通过；同一检查在已安装的 rc.2 上也通过。85 项测试通过。修复包已安装到当前 rc.2 桌面实例，实际打开设置面板并刷新额度、模型；原生接口与真实流式调用通过，原默认模型已恢复。rc.3 宿主尚未安装，因此未声称完成 rc.3 桌面 UI 或登录后的接口验证。
+
 
 ## License
 
