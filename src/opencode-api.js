@@ -3,6 +3,14 @@ import { createHash } from 'node:crypto';
 /** OpenCode Zen Go API root. Both the usage and the model catalog live under it. */
 export const DEFAULT_BASE_URL = 'https://opencode.ai/zen/go/v1';
 
+// The official Go model list is public. Usage and inference still require a key.
+export function isPublicModelCatalog(baseUrl = DEFAULT_BASE_URL) {
+  try {
+    const url = new URL(baseUrl);
+    return url.origin === 'https://opencode.ai' && ['/zen/go/v1', '/inference/go/v1'].includes(url.pathname.replace(/\/$/, ''));
+  } catch { return false; }
+}
+
 export const USAGE_WINDOWS = [
   { id: 'rolling', name: '5 小时额度', nameEn: '5-hour window' },
   { id: 'weekly', name: '每周额度', nameEn: 'Weekly window' },
@@ -83,7 +91,8 @@ function classify(status) {
  * The API key is only ever placed in the Authorization header.
  */
 export async function requestJson(path, { baseUrl = DEFAULT_BASE_URL, apiKey, signal, timeoutMs = 20000, fetchImpl = fetch } = {}) {
-  if (typeof apiKey !== 'string' || !apiKey) throw new OpenCodeGoError('还没有可用的 OpenCode Go API key。', 'OPENCODE_GO_AUTH_REQUIRED');
+  const publicCatalog = path === 'models' && isPublicModelCatalog(baseUrl);
+  if (!publicCatalog && (typeof apiKey !== 'string' || !apiKey)) throw new OpenCodeGoError('还没有可用的 OpenCode Go API key。', 'OPENCODE_GO_AUTH_REQUIRED');
   let url;
   try {
     url = new URL(path, baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
@@ -103,7 +112,7 @@ export async function requestJson(path, { baseUrl = DEFAULT_BASE_URL, apiKey, si
   try {
     response = await fetchImpl(url, {
       method: 'GET',
-      headers: { authorization: `Bearer ${apiKey}`, accept: 'application/json', 'user-agent': 'dsh-opencode-go-auth/0.1.0' },
+      headers: { ...(!publicCatalog ? { authorization: `Bearer ${apiKey}` } : {}), accept: 'application/json', 'user-agent': 'dsh-opencode-go-auth/0.2.2' },
       signal: timer.signal,
       redirect: 'error',
     });

@@ -69,6 +69,7 @@ test('discovery publishes the live catalog and persists it for that key', async 
   assert.equal(state.source, 'opencode');
   assert.equal(state.discoveredModels, 2);
   assert.equal(state.totalModels, 3);
+  assert.deepEqual(state.availableModels, sync1.models.map(({ id, name }) => ({ id, name })));
   assert.equal(state.cacheSaved, true);
   assert.equal(replaced, 1);
   assert.deepEqual(sync1.models.map(model => model.id), ['kimi-k3', 'brand-new-model', 'grok-4.7']);
@@ -92,4 +93,44 @@ test('a disabled connection neither schedules nor fetches', async () => {
   assert.equal(fetched, 0);
   await assert.rejects(sync1.refresh(), error => error.code === 'OPENCODE_GO_CONNECTION_DISABLED');
   assert.equal(sync1.state().nextSyncAt, null);
+});
+
+test('public discovery works before login, persists a public snapshot, and survives credential removal', async () => {
+  const store = memoryStore();
+  let reads = 0;
+  const sync1 = sync({ publicCatalog: true, store, source: { baseUrl: 'https://opencode.ai/zen/go/v1', read: async () => { reads++; throw new OpenCodeGoError('missing', 'OPENCODE_GO_AUTH_REQUIRED'); } },
+    fetchIds: async options => { assert.equal(options.apiKey, undefined); return ['gemini-4-argon']; } });
+  await sync1.start();
+  assert.equal(reads, 0);
+  assert.equal(sync1.state().source, 'opencode');
+  assert.equal(sync1.state().error, null);
+  assert.equal(sync1.state().publicCatalog, true);
+  assert.deepEqual(store.data, { version: 2, scope: 'public', fetchedAt: 5000, models: ['gemini-4-argon'] });
+  assert.equal(sync1.observeKey(undefined), false);
+  assert(sync1.models.some(model => model.id === 'gemini-4-argon'));
+  sync1.dispose();
+});
+
+test('public caches restore offline across logins, without reusing a legacy private snapshot', async () => {
+  const cache = { version: 2, scope: 'public', fetchedAt: 1000, models: ['gemini-4-argon'] };
+  const options = { publicCatalog: true, fetchIds: async () => { throw new OpenCodeGoError('offline', 'OPENCODE_GO_UNREACHABLE'); } };
+  const restored = sync({ ...options, store: memoryStore(cache) });
+  await restored.start();
+  assert.equal(restored.state().source, 'cache');
+  assert(restored.models.some(model => model.id === 'gemini-4-argon'));
+  const legacy = sync({ ...options, store: memoryStore({ version: 1, keyHash: keyFingerprint(KEY), fetchedAt: 1000, models: ['private-model'] }) });
+  await legacy.start();
+  assert.equal(legacy.state().source, 'bundled');
+  assert(!legacy.models.some(model => model.id === 'private-model'));
+  restored.dispose(); legacy.dispose();
+});
+
+test('the disk cache accepts explicit public snapshots and rejects unsupported scopes', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'opencode-go-public-'));
+  const store = modelCacheStore(join(dir, 'models.json'));
+  const value = { version: 2, scope: 'public', fetchedAt: 1234, models: ['gemini-4-argon'] };
+  await store.write(value);
+  assert.deepEqual(await store.read(), value);
+  await store.write({ ...value, scope: 'private' });
+  assert.equal(await store.read(), null);
 });

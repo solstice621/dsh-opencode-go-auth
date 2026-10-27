@@ -12,6 +12,21 @@
 
 const PROTOCOL_ORDER = ['openai-completions', 'openai-responses', 'anthropic-messages', 'google-generative-ai'];
 
+// https://opencode.ai/v2/docs/console/go/ and Google's Argon model card.
+// Keep newer SDK metadata when available; this fills the older SDK's gap.
+export function supplementGoModels(models) {
+  if (models.some(model => model.id === 'gemini-4-argon')) return models;
+  return [...models, {
+    id: 'gemini-4-argon', name: 'Gemini 4 Argon', api: 'google-generative-ai', provider: 'opencode-go',
+    baseUrl: 'https://opencode.ai/inference/go/google/v1beta', type: 'chat',
+    input: ['text', 'image'], reasoning: true,
+    thinkingLevelMap: { off: null, minimal: null, low: 'low', medium: 'medium', high: 'high', xhigh: null, max: null },
+    contextWindow: 1048576, maxTokens: 65536,
+    // Subscription inference; Harness does not report pi-ai's price metadata.
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  }];
+}
+
 /** The Go route for a protocol, taken from the bundled Go catalog itself. */
 function routeFor(baseline, api) {
   return baseline.find(model => model.api === api)?.baseUrl;

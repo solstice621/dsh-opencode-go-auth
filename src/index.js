@@ -11,8 +11,10 @@ import { AuthController, authRpcHandler } from './auth-controller.js';
 import { ModelSync, modelCacheStore } from './model-sync.js';
 import { quotaCacheFile, quotaCacheStore } from './quota-cache.js';
 import { QuotaSync } from './quota-sync.js';
-import { tagModels } from './model-catalog.js';
-import { DEFAULT_BASE_URL, fetchModelIds, fetchUsage } from './opencode-api.js';
+import { tagModels, supplementGoModels } from './model-catalog.js';
+import { DEFAULT_BASE_URL, fetchModelIds, fetchUsage, isPublicModelCatalog } from './opencode-api.js';
+import { withModelSelection } from './model-selection.js';
+import { withGoogleTransport } from './go-provider.js';
 
 export const name = 'dsh-opencode-go-auth';
 export const inject = ['llm', 'connection'];
@@ -22,6 +24,7 @@ export const ENDPOINTS = ['state', 'refresh', 'quota', 'cached', 'login', 'logou
 
 export const Config = Schema.object({
   enabled: Schema.boolean().default(true).description('Enable the OpenCode Go connection in Harness').volatile(),
+  selectedModelIds: Schema.union([Schema.const(null), Schema.array(Schema.string())]).default(null).description('Model ids shown in the conversation picker; null shows all models, [] hides all').volatile(),
   apiKey: Schema.string().description('Literal OpenCode Go API key; prefer the credential store or the environment'),
   apiKeyEnv: Schema.string().default(DEFAULT_API_KEY_ENV).description('Credential reference that holds the API key'),
   baseUrl: Schema.string().default(DEFAULT_BASE_URL).description('OpenCode Zen Go API root'),
@@ -48,8 +51,8 @@ export function childEnvironment() {
 // tool-call conversion, image projection, cancellation and attribution headers.
 export function createOpencodeGoAdapter(ctx, config = {}, sourceOverride, beforeAuth = async () => {}, getCatalog) {
   const source = sourceOverride ?? new ApiKeySource({ ...config, credentials: ctx.get('credentials') });
-  const native = opencodeGoProvider();
-  const models = tagModels(native.getModels(), PROVIDER);
+  const native = withGoogleTransport(opencodeGoProvider(), opencodeProvider());
+  const models = tagModels(supplementGoModels(native.getModels()), PROVIDER);
   const providerBase = {
     ...native,
     id: PROVIDER,
@@ -89,7 +92,7 @@ export function createOpencodeGoAdapter(ctx, config = {}, sourceOverride, before
     }]]);
     return profiles;
   };
-  return new PiAiAdapter({
+  const adapter = new PiAiAdapter({
     profiles: currentProfiles,
     resolveApiKey: async () => undefined,
     auth: {
@@ -105,6 +108,7 @@ export function createOpencodeGoAdapter(ctx, config = {}, sourceOverride, before
     resolveImageAccess: (attachments, ref) => resolveImageAttachmentAccess(attachments, path => ctx.get('fs')?.processPathFromHostPath(path), ref),
     onReplayDegrade: () => ctx.logger.warn('OpenCode Go response history fell back to provider-neutral content.'),
   });
+  return withModelSelection(adapter, config);
 }
 
 export async function apply(ctx, config) {
@@ -121,7 +125,7 @@ export async function apply(ctx, config) {
 
   const source = new ApiKeySource({ ...config, baseUrl, credentials: ctx.get('credentials') });
   const enabled = () => (typeof config.enabled?.get === 'function' ? config.enabled.get() : config.enabled) !== false;
-  const baseline = tagModels(opencodeGoProvider().getModels(), PROVIDER);
+  const baseline = tagModels(supplementGoModels(opencodeGoProvider().getModels()), PROVIDER);
   // Zen and Go share model ids; the Zen catalog only supplies metadata for ids
   // the bundled Go catalog is missing, and the Go route is taken from the
   // bundled Go catalog itself.
@@ -129,6 +133,7 @@ export async function apply(ctx, config) {
   let registration;
   const modelSync = new ModelSync({
     source, enabled, beforeAuth: () => bridge.ensure(), baseline, fallbackCatalog, provider: PROVIDER,
+    publicCatalog: isPublicModelCatalog(baseUrl),
     fetchIds: options => fetchModelIds({ ...options, timeoutMs }),
     intervalMinutes: config.modelRefreshMinutes ?? 360,
     ...(config.modelCachePath ? { store: modelCacheStore(config.modelCachePath) } : {}),
@@ -166,6 +171,7 @@ export async function apply(ctx, config) {
     if (!enabled()) throw new LlmError('OpenCode Go 连接已停用，请在设置 → OpenCode / Go 中启用。', 'OPENCODE_GO_CONNECTION_DISABLED');
     await bridge.ensure();
   }, () => modelSync.models));
+  ctx.on('loader/volatile-update', () => registration?.replace?.([PROVIDER]));
 
   // Model discovery never delays startup or replaces a working catalog on error.
   modelSync.start().catch(() => ctx.logger.warn('OpenCode Go model sync failed; the current catalog remains available.'));

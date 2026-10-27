@@ -17,6 +17,9 @@ window.__ModuleLoader__.load({
 .opencode-go-auth .text-button{border:0;padding:0;color:#4d6bfe;background:none}.opencode-go-auth .footer{margin-top:20px;font-size:12px;color:var(--dsw-alias-label-secondary)}
 .opencode-go-auth .login-form{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}.opencode-go-auth input[type=password]{flex:1;min-width:220px;font:inherit;font-size:13px;padding:7px 11px;border-radius:8px;border:1px solid var(--dsw-alias-border-medium,rgba(128,128,128,.3));background:transparent;color:inherit}
 @media(max-width:780px){.opencode-go-auth .quota-grid{grid-template-columns:1fr}.opencode-go-auth .row{align-items:flex-start}}
+.opencode-go-auth .model-search{box-sizing:border-box;width:100%;margin-top:14px;padding:8px 10px;border:1px solid var(--dsw-alias-border-medium,rgba(128,128,128,.25));border-radius:8px;background:transparent;color:inherit;font:inherit;font-size:13px}
+.opencode-go-auth .model-list{max-height:280px;overflow-y:auto;margin-top:10px}.opencode-go-auth .model-option{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:8px;cursor:pointer}.opencode-go-auth .model-option:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(128,128,128,.1))}.opencode-go-auth .model-option:has(input:disabled){opacity:.6;cursor:default}
+.opencode-go-auth .model-option input{width:16px;height:16px;margin:0;flex-shrink:0;accent-color:#4d6bfe}.opencode-go-auth .model-label{display:flex;flex-direction:column;min-width:0}.opencode-go-auth .model-id{overflow-wrap:anywhere}.opencode-go-auth .model-list input:focus-visible,.opencode-go-auth .model-search:focus-visible{outline:2px solid #4d6bfe;outline-offset:2px}
 @media(prefers-reduced-motion:no-preference){.opencode-go-auth .fill{transition:width .2s ease}}
 `;
     const errors = {
@@ -48,6 +51,65 @@ window.__ModuleLoader__.load({
       return String(source);
     };
     const date = value => value ? new Date(value).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '未知';
+
+    function ModelSelection({ models = [], form, formState }) {
+      const [query, setQuery] = React.useState('');
+      const [saving, setSaving] = React.useState(false);
+      const [message, setMessage] = React.useState(null);
+      const [error, setError] = React.useState(null);
+      const [pendingIds, setPendingIds] = React.useState(undefined);
+      const pending = React.useRef(false);
+      const active = React.useRef(true);
+      React.useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
+      const savedIds = formState.value?.selectedModelIds ?? null;
+      const ids = pendingIds === undefined ? savedIds : pendingIds;
+      const selected = ids === null ? null : new Set(ids);
+      const count = models.filter(model => selected === null || selected.has(model.id)).length;
+      const needle = query.trim().toLowerCase();
+      const matches = models.filter(model => (model.name + ' ' + model.id).toLowerCase().includes(needle));
+      const locked = saving || !formState.writable || !models.length;
+
+      async function save(next) {
+        if (pending.current) return;
+        pending.current = true;
+        setPendingIds(next);
+        setSaving(true); setError(null); setMessage(null);
+        try {
+          if (!await form.set('selectedModelIds', next)) throw Error('settings write failed');
+          if (active.current) setMessage('已保存，会话模型列表已更新。');
+        } catch {
+          if (active.current) setError('模型选择未保存，请重试。');
+        } finally {
+          pending.current = false;
+          if (active.current) { setPendingIds(undefined); setSaving(false); }
+        }
+      }
+      function toggle(id, checked) {
+        const next = new Set(ids ?? models.map(model => model.id));
+        if (checked) next.add(id); else next.delete(id);
+        save([...next]);
+      }
+
+      return h('div', { className: 'card', 'aria-busy': saving },
+        h('div', { className: 'row' }, h('h3', null, '模型显示'), h('span', { className: 'small muted', role: 'status' }, '已选 ' + count + ' / ' + models.length + ' 个模型')),
+        h('p', { className: 'small muted', style: { marginTop: 12 } }, '勾选后自动保存；会话模型列表只显示选中的模型。'),
+        h('p', { className: 'small muted' }, ids === null ? '默认显示全部模型，包括之后同步到的新模型。' : '之后同步到的新模型需手动勾选。'),
+        h('div', { className: 'buttons' },
+          h('button', { type: 'button', disabled: locked, onClick: () => save([...new Set([...(ids ?? []), ...models.map(model => model.id)])]) }, '全选'),
+          h('button', { type: 'button', disabled: locked || count === 0, onClick: () => save([]) }, '全不选'),
+          h('button', { type: 'button', disabled: locked || ids === null, onClick: () => save(null) }, '恢复默认')),
+        h('input', { type: 'search', className: 'model-search', placeholder: '搜索模型名称或 ID…', 'aria-label': '搜索可显示的模型', value: query, onChange: event => setQuery(event.target.value) }),
+        h('div', { className: 'model-list', role: 'group', 'aria-label': '会话中显示的模型' },
+          matches.map(model => h('label', { className: 'model-option', key: model.id },
+            h('input', { type: 'checkbox', checked: selected === null || selected.has(model.id), disabled: locked, onChange: event => toggle(model.id, event.target.checked) }),
+            h('span', { className: 'model-label' }, h('span', null, model.name), h('span', { className: 'small muted model-id' }, model.id)))),
+          !matches.length && h('p', { className: 'small muted' }, models.length ? '没有匹配的模型。' : '正在读取模型目录…')),
+        ids !== null && count === 0 && models.length > 0 && h('p', { className: 'small muted' }, '已隐藏此插件的全部模型，可随时重新勾选。'),
+        !formState.writable && h('p', { className: 'small muted' }, '当前设置暂不可写，请稍后重试。'),
+        saving && h('p', { className: 'small muted', role: 'status' }, '正在保存模型选择…'),
+        message && h('p', { className: 'small muted', role: 'status' }, message),
+        error && h('p', { className: 'notice error', role: 'alert' }, error));
+    }
 
     function QuotaWindow({ value, hidden }) {
       if (!value) return h('div', null, h('p', { className: 'muted small' }, '该窗口数据暂不可用'));
@@ -205,13 +267,15 @@ window.__ModuleLoader__.load({
           h('p', { className: 'small muted', style: { marginTop: 8 } }, !enabled ? '连接已停用，后台额度刷新已暂停。' : `Harness 运行时，后台每 ${state?.quotaSync?.intervalMinutes ?? 5} 分钟自动刷新额度；无需打开此页面。`),
         ),
         state?.showModelSync !== false && h('div', { className: 'card' },
-          h('div', { className: 'row' }, h('h3', null, '模型自动同步'), h('button', { className: 'text-button', disabled: locked || !enabled || !state?.connected || state?.models?.refreshing, onClick: () => operation('models') }, busy === 'models' || state?.models?.refreshing ? '同步中…' : '刷新模型')),
+          h('div', { className: 'row' }, h('h3', null, '模型自动同步'), h('button', { className: 'text-button', disabled: locked || !enabled || (!state?.connected && !state?.models?.publicCatalog) || state?.models?.refreshing, onClick: () => operation('models') }, busy === 'models' || state?.models?.refreshing ? '同步中…' : '刷新模型')),
           h('p', { className: 'muted small', style: { marginTop: 14 } }, !enabled ? '连接已停用，自动同步已暂停。' : `启动时同步，每 ${state?.models?.intervalMinutes ?? 360} 分钟自动刷新；更换 API key 后重新同步。`),
           state?.models && h('p', { className: 'small muted', style: { marginTop: 8 } }, `当前 ${state.models.totalModels} 个模型 · ${state.models.source === 'opencode' ? 'OpenCode Go 官方目录' : state.models.source === 'cache' ? '最近成功的缓存' : '内置备用目录'} · 最近同步：${date(state.models.lastSyncAt)}`),
           state?.models?.error && h('p', { className: 'small muted' }, errors[state.models.error] ?? '同步未完成，当前模型目录仍可使用。'),
           state?.models?.cacheSaved === false && h('p', { className: 'small muted' }, '模型目录已更新，但缓存未保存；重启后会重新同步。'),
+          state?.models?.publicCatalog && h('p', { className: 'small muted' }, '公开模型目录无需登录即可同步；使用模型和读取额度仍需有效的 Go 授权。'),
           h('p', { className: 'small muted', style: { marginTop: 8 } }, '目录接口只返回模型 ID；已知模型沿用官方元数据，新增模型改用保守的上下文与协议设置。'),
         ),
+        h(ModelSelection, { models: state?.models?.availableModels, form, formState }),
         h('p', { className: 'footer' }, '使用时，在会话模型选择器中选择「OpenCode · Go 额度」。系统代理切换后需要重启 Harness。'));
     }
 
