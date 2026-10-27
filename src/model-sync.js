@@ -27,7 +27,9 @@ export function modelCacheStore(path) {
         const raw = await readFile(path, 'utf8');
         if (Buffer.byteLength(raw) > 1048576) return null;
         const data = JSON.parse(raw);
-        if (data.version !== 1 || !/^[a-f0-9]{64}$/.test(data.keyHash) || !Number.isFinite(data.fetchedAt) || data.fetchedAt <= 0) return null;
+        if (!Number.isFinite(data.fetchedAt) || data.fetchedAt <= 0) return null;
+        if (data.version === 2 && data.scope === 'public') return { version: 2, scope: 'public', fetchedAt: data.fetchedAt, models: cacheIds(data.models) };
+        if (data.version !== 1 || !/^[a-f0-9]{64}$/.test(data.keyHash)) return null;
         return { version: 1, keyHash: data.keyHash, fetchedAt: data.fetchedAt, models: cacheIds(data.models) };
       } catch { return null; }
     },
@@ -41,15 +43,15 @@ export function modelCacheStore(path) {
 }
 
 /**
- * Keeps the model picker aligned with the subscription's live catalog. The
- * account key is the API key's fingerprint, so switching keys can never
- * reuse another subscription's cached catalog.
+ * Keeps the picker aligned with the live catalog. Official public snapshots
+ * remain available without login; custom authenticated catalogs are isolated
+ * by the API key's fingerprint and never reuse another key's snapshot.
  */
 export class ModelSync {
   constructor({ source, baseline, fallbackCatalog = [], provider, enabled = () => true, beforeAuth = async () => {}, fetchIds = fetchModelIds,
-    intervalMinutes = 360, store, onUpdate = () => {}, now = Date.now,
+    intervalMinutes = 360, publicCatalog = false, store, onUpdate = () => {}, now = Date.now,
     schedule = callback => setInterval(callback, 60000), unschedule = clearInterval } = {}) {
-    Object.assign(this, { source, baseline, fallbackCatalog, provider, enabled, beforeAuth, fetchIds, intervalMinutes, onUpdate, now, schedule, unschedule });
+    Object.assign(this, { source, baseline, fallbackCatalog, provider, enabled, beforeAuth, fetchIds, intervalMinutes, publicCatalog, onUpdate, now, schedule, unschedule });
     this.store = store ?? modelCacheStore(modelCacheFile(source?.baseUrl));
     this.models = baseline; this.origin = 'bundled'; this.discovered = []; this.abort = new AbortController();
   }
@@ -57,7 +59,9 @@ export class ModelSync {
   state() {
     return {
       automatic: true, intervalMinutes: this.intervalMinutes, refreshing: Boolean(this.pending),
+      publicCatalog: this.publicCatalog,
       source: this.origin, totalModels: this.models.length, discoveredModels: this.discovered.length,
+      availableModels: this.models.map(({ id, name }) => ({ id, name })),
       lastSyncAt: this.lastSyncAt ?? null, lastAttemptAt: this.lastAttemptAt ?? null,
       nextSyncAt: this.enabled() ? (this.lastAttemptAt ?? this.now()) + this.intervalMinutes * 60000 : null,
       error: this.error ?? null, cacheSaved: this.cacheSaved ?? null,
@@ -65,6 +69,7 @@ export class ModelSync {
   }
 
   observeKey(fingerprint) {
+    if (this.publicCatalog) return false;
     const key = fingerprint ? keyFingerprint(fingerprint) : undefined;
     if (key === this.key) return false;
     this.key = key; this.discovered = []; this.lastSyncAt = undefined; this.lastAttemptAt = undefined;
@@ -83,13 +88,15 @@ export class ModelSync {
 
   async start() {
     try {
-      const auth = await this.source.read();
+      const auth = await this.catalogAuth();
       this.observeKey(auth.key);
       const cached = await this.store.read();
-      const current = await this.source.read();
+      const current = await this.catalogAuth();
       this.observeKey(current.key);
-      // Never restore another key's catalog or a future-dated snapshot.
-      if (!this.disposed && cached?.keyHash === this.key && cached.fetchedAt <= this.now() + 300000 && cached.fetchedAt > (this.lastSyncAt ?? 0)) {
+      // Public snapshots are explicit; legacy/private snapshots still require
+      // a matching key, and neither kind may be future-dated.
+      const matches = this.publicCatalog ? cached?.version === 2 && cached.scope === 'public' : cached?.version !== 2 && cached?.keyHash === this.key;
+      if (!this.disposed && cached && matches && cached.fetchedAt <= this.now() + 300000 && cached.fetchedAt > (this.lastSyncAt ?? 0)) {
         this.lastSyncAt = cached.fetchedAt; this.publish(cached.models, 'cache');
       }
     } catch (error) { this.error = safeCode(error); }
@@ -101,7 +108,7 @@ export class ModelSync {
   async tick(force = false) {
     if (this.disposed || !this.enabled()) return this.state();
     try {
-      const auth = await this.source.read();
+      const auth = await this.catalogAuth();
       const changed = this.observeKey(auth.key);
       if (force || changed || this.lastAttemptAt === undefined || this.now() - this.lastAttemptAt >= this.intervalMinutes * 60000) return await this.refresh();
     } catch (error) {
@@ -124,21 +131,21 @@ export class ModelSync {
 
   async fetchModels() {
     try {
-      const before = await this.source.read();
+      const before = await this.catalogAuth();
       this.observeKey(before.key); const key = this.key;
       this.lastAttemptAt = this.now();
       await this.beforeAuth();
       if (this.disposed) throw new OpenCodeGoError('插件已停用。', 'OPENCODE_GO_CANCELLED');
       const ids = await this.fetchIds({ baseUrl: this.source.baseUrl, apiKey: before.key, signal: this.abort.signal });
-      const after = await this.source.read();
+      const after = await this.catalogAuth();
       if (this.disposed) throw new OpenCodeGoError('插件已停用。', 'OPENCODE_GO_CANCELLED');
-      if (keyFingerprint(after.key) !== key) {
+      if (!this.publicCatalog && keyFingerprint(after.key) !== key) {
         this.observeKey(after.key);
         throw new OpenCodeGoError('API key 已变化，请重新同步。', 'OPENCODE_GO_KEY_CHANGED');
       }
       this.lastSyncAt = this.now(); this.error = undefined;
       this.publish(ids, 'opencode');
-      try { await this.store.write({ version: 1, keyHash: key, fetchedAt: this.lastSyncAt, models: ids }); this.cacheSaved = true; }
+      try { await this.store.write({ ...(this.publicCatalog ? { version: 2, scope: 'public' } : { version: 1, keyHash: key }), fetchedAt: this.lastSyncAt, models: ids }); this.cacheSaved = true; }
       catch { this.cacheSaved = false; }
     } catch (error) {
       if (error instanceof OpenCodeGoError && error.code === 'OPENCODE_GO_AUTH_REQUIRED') this.observeKey(undefined);
@@ -146,6 +153,8 @@ export class ModelSync {
       throw new OpenCodeGoError('模型同步失败，保留当前目录。', safeCode(error));
     }
   }
+
+  catalogAuth() { return this.publicCatalog ? Promise.resolve({}) : this.source.read(); }
 
   dispose() { this.disposed = true; this.unschedule(this.timer); this.abort.abort(); }
 }

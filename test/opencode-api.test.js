@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_BASE_URL, OpenCodeGoError, keyFingerprint, maskApiKey, normalizeModelIds, normalizeUsage, requestJson } from '../src/opencode-api.js';
+import { DEFAULT_BASE_URL, OpenCodeGoError, keyFingerprint, maskApiKey, normalizeModelIds, normalizeUsage, requestJson, isPublicModelCatalog, fetchModelIds } from '../src/opencode-api.js';
 
 const KEY = 'oc_sk_0308a826449c_glgjvXswCEqZN73tZUvOY2UxVCRzb5Cz';
 
@@ -103,4 +103,18 @@ test('requestJson honours an already-aborted caller signal', async () => {
   const controller = new AbortController();
   controller.abort();
   await assert.rejects(requestJson('usage', { apiKey: KEY, signal: controller.signal, fetchImpl: async () => jsonResponse({}) }), error => error.code === 'OPENCODE_GO_CANCELLED');
+});
+
+test('official discovery works without credentials and never attaches a saved key', async () => {
+  for (const apiKey of [undefined, KEY]) {
+    const ids = await fetchModelIds({ apiKey, fetchImpl: async (url, options) => {
+      assert.equal(String(url), DEFAULT_BASE_URL + '/models');
+      assert.equal(options.headers.authorization, undefined);
+      return jsonResponse({ data: [{ id: 'gemini-4-argon' }] });
+    } });
+    assert.deepEqual(ids, ['gemini-4-argon']);
+  }
+  assert.equal(isPublicModelCatalog('https://opencode.ai/inference/go/v1/'), true);
+  for (const url of ['http://opencode.ai/zen/go/v1', 'https://opencode.ai.evil/zen/go/v1', 'https://opencode.ai/other']) assert.equal(isPublicModelCatalog(url), false);
+  await assert.rejects(fetchModelIds({ baseUrl: 'https://example.test/v1' }), error => error.code === 'OPENCODE_GO_AUTH_REQUIRED');
 });

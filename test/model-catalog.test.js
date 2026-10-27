@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeOpencodeModels, tagModels } from '../src/model-catalog.js';
+import { mergeOpencodeModels, tagModels, supplementGoModels } from '../src/model-catalog.js';
 
 const GO_ROUTE = 'https://opencode.ai/zen/go/v1';
 
@@ -72,4 +72,18 @@ test('tagModels rewrites the provider without touching anything else', () => {
   assert.deepEqual(models.map(model => model.provider), ['opencode-go-subscription', 'opencode-go-subscription']);
   assert.equal(models[1].name, 'Grok 4.7');
   assert.equal('provider' in baseline()[0], false);
+});
+
+test('Argon gets Google routing, official limits and only its three supported reasoning levels', () => {
+  const models = supplementGoModels(baseline());
+  const argon = models.find(model => model.id === 'gemini-4-argon');
+  assert.equal(argon.name, 'Gemini 4 Argon');
+  assert.equal(argon.api, 'google-generative-ai');
+  assert.equal(argon.baseUrl, 'https://opencode.ai/inference/go/google/v1beta');
+  assert.equal(argon.contextWindow, 1048576);
+  assert.equal(argon.maxTokens, 65536);
+  assert.deepEqual(Object.entries(argon.thinkingLevelMap).filter(([, value]) => value !== null).map(([key]) => key), ['low', 'medium', 'high']);
+  const merged = mergeOpencodeModels(models, ['gemini-4-argon']);
+  assert.equal(merged[0], argon, 'discovery must not replace Argon with an OpenAI template');
+  assert.equal(supplementGoModels(models), models, 'a newer native SDK stays authoritative');
 });

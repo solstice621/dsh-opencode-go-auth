@@ -78,7 +78,21 @@ Harness `0.2.1-rc.2` 需要包含 `0.2.2-local.2` 兼容性修复的提交或本
 
 ### 后台自动更新数据
 
-本地开发版本 `0.2.2-local.1` 增加进程内的额度调度：Harness 运行且插件连接启用时，默认每 **5 分钟**读取额度，模型目录仍默认每 **6 小时**同步。这里更新的是**额度与模型数据**，不会拉取、安装或执行新的插件代码。
+官方 Go 模型目录是公开数据：模型发现无需 API key，登录前也可以点击「刷新模型」。目录快照以公开目录格式保存，退出授权后仍可显示模型；额度读取与实际调用始终需要有效的 Go API key。自定义接口继续按其授权要求读取并隔离缓存。
+
+### Gemini 4 Argon
+
+`gemini-4-argon` 使用官方 `https://opencode.ai/inference/go/google/v1beta` Google 协议入口，不使用 OpenAI Chat Completions 模板。插件为尚未包含该模型的 Harness SDK 补充元数据，并复用原生 Google 传输、工具调用与历史转换，保留 OpenCode 的会话路由标头。
+
+支持文本与图片输入，统一上下文 1,048,576 token，同步输出上限 65,536 token；推理等级为 low、medium、high。旧 SDK 会将 Argon 的 `thinkingLevel` 误判成 `thinkingBudget`，插件通过原生详细流接口传递正确的等级，同时保持模型 ID 为 `gemini-4-argon`。较新 SDK 自带的 Go 模型元数据优先使用。
+
+如果已经筛选过模型，请在「模型显示」中额外勾选 Gemini 4 Argon。授权 key 保存在 Harness 凭据库中，默认引用名是 `OPENCODE_GO_API_KEY`。
+
+参考：[OpenCode Go 端点](https://opencode.ai/v2/docs/console/go/)、[Google Argon 模型说明](https://ai.google.dev/gemini-api/docs/models/gemini-4-argon)。
+
+### 定时刷新
+
+Harness 运行且插件连接启用时，默认每 **5 分钟**读取额度，模型目录默认每 **6 小时**同步。这里更新的是**额度与模型数据**，不会拉取、安装或执行新的插件代码。
 
 调度器每分钟检查一次上次尝试时间；启动时没有本账号快照或快照已过期会立即刷新，仍新鲜的成功快照可避免重复启动请求。手动与后台额度读取共享同一个进行中的请求；失败保留最近成功的磁盘快照，并按设定周期重试。停用连接后不发起读取，退出 Harness 或卸载插件会清理计时器并取消请求，没有独立 daemon 或 launchd。运行中更换 key 或卸载后到达的旧响应不会保存或展示。
 
@@ -96,11 +110,18 @@ Harness `0.2.1-rc.2` 需要包含 `0.2.2-local.2` 兼容性修复的提交或本
 
 「移除授权」删除凭据存储中的 key，不影响本机 OpenCode CLI 的登录。「停用此连接」只让 Harness 停用该 provider，保留已保存的 key。
 
+### 选择会话中显示的模型
+
+打开「设置 → OpenCode / Go → 模型显示」，勾选希望在会话模型选择器中保留的模型。每次勾选自动保存并即时更新，无需重启；支持按名称或 ID 搜索、全选、全不选和恢复默认。
+
+初次使用或恢复默认时显示全部模型，包括之后同步到的新模型。手动筛选后，只有勾选的模型会显示，新同步的模型需要手动勾选。全不选会隐藏该插件的全部模型，但设置页始终保留完整目录，方便重新勾选。选择会随 Harness 配置保存并在重启后恢复；暂时不在目录中的已选 ID 也会保留。筛选不主动切换已有会话的模型，已有请求继续使用原来的模型描述。
+
 ## 配置项
 
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |
 | `enabled` | `true` | 是否在 Harness 中启用该连接 |
+| `selectedModelIds` | 未设置 / `null` | 会话中显示的模型 ID；未设置显示全部，`[]` 隐藏全部；实时修改并保存 |
 | `apiKey` | — | 直接给出 API key（优先于其他来源，会写入配置文件） |
 | `apiKeyEnv` | `OPENCODE_GO_API_KEY` | 保存 / 读取 key 的凭据引用名 |
 | `baseUrl` | `https://opencode.ai/zen/go/v1` | OpenCode Zen Go 接口根地址 |

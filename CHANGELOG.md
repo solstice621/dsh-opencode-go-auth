@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.2-local.6 (local enhancement, not published)
+
+- Discover the official public Go catalog without requiring or sending an API key; keep authenticated usage and inference separate.
+- Cache public catalog snapshots across logins and allow manual model refresh before login.
+- Add Gemini 4 Argon with the official Google Go endpoint, text/image input, 1M context, 64K synchronous output and low/medium/high thinking.
+- Reuse the native Zen Google transport and its OpenCode session headers; translate Argon's thinking levels for older SDKs without changing the model id.
+
+## 0.2.2-local.5 (local enhancement, not published)
+
+- Add a searchable model checkbox list with automatic saving, select all/none, and restore defaults.
+- Paint checkbox changes immediately while saving and roll back the display if persistence fails.
+- Persist `selectedModelIds` in Harness settings and update the native conversation picker immediately; explicit selections also apply to future catalog refreshes.
+- Keep the full settings catalog and exact model resolution available when picker entries are hidden.
+
 ## 0.2.1
 
 - Add `showModelSync` (default `true`); set it to `false` to drop the model-catalog card, leaving account and usage on the page. The preference is reported through `state` rather than read from raw configuration.
