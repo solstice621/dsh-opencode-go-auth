@@ -28,7 +28,8 @@
 ## 兼容性与前提
 
 - 当前验证环境：**macOS + DeepSeek Harness Desktop `0.2.1-rc.3` + pi-ai `1.1.0`**，包含授权、额度读取、桌面模型勾选及实际对话。此前也在 Harness `0.2.0-rc.2` / `0.2.1-rc.2` 验证过。
-- 依赖声明允许 Harness `0.2.0-rc.2` / `0.2.1-rc.2` / `0.2.1-rc.3`，以及配套的 pi-ai `0.87.1` / `1.1.0`；其他版本仍需验证。
+- 另通过 Harness SDK `0.2.1-rc.5` + pi-ai `1.4.0` 的自动化检查：插件导入、缺失接口报错和原生适配器模型枚举；未发送模型请求。
+- 不设 Harness 或宿主 SDK 的版本号白名单；保留 SDK peer 依赖并使用宿主提供的版本。启动前检查原生适配器注册和认证 Fetch 接口，缺少接口会明确报错。以上是实测环境，其他版本仍需验证。
 - 需要 **OpenCode Go 或 Go Plus 订阅**及对应 API key，在 [opencode.ai/auth](https://opencode.ai/auth) 订阅后复制。
 - 可选：本机安装 opencode CLI 并完成 `/connect`，插件会直接复用 `~/.local/share/opencode/auth.json`。
 - 当前只支持 `type: "api"` 形式的登录；OAuth 形式的条目会被忽略。
@@ -191,7 +192,7 @@ npm pack --ignore-scripts
 
 A native OpenCode Go / Go Plus subscription plugin for DeepSeek Harness Desktop. Save your API key in the Harness credential store, view usage windows, and refresh quota and model data in the background. The official model catalog is public; inference and usage reads require valid Go credentials.
 
-Install from `github:solstice621/dsh-opencode-go-auth#main` for the current compatibility, authorization, sync, and model-selection updates. Search and check models in **Settings → OpenCode / Go → 模型显示**; changes apply immediately and persist across restarts. Reset to defaults to include future models automatically; a custom selection or Select all requires selecting newly discovered models manually. The current integration was verified on macOS with Harness `0.2.1-rc.3` and pi-ai `1.1.0`. This independent community plugin is not an official OpenCode / Anomaly product.
+Install from `github:solstice621/dsh-opencode-go-auth#main` for the current compatibility, authorization, sync, and model-selection updates. Search and check models in **Settings → OpenCode / Go → 模型显示**; changes apply immediately and persist across restarts. Reset to defaults to include future models automatically; a custom selection or Select all requires selecting newly discovered models manually. The current integration was verified on macOS with Harness `0.2.1-rc.3` and pi-ai `1.1.0`. Host SDK peer dependencies have no version restriction. Activation checks required host service APIs; module imports still require the SDK exports used by the adapter. This independent community plugin is not an official OpenCode / Anomaly product.
 
 ## License
 

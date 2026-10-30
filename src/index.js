@@ -15,6 +15,7 @@ import { tagModels, supplementGoModels } from './model-catalog.js';
 import { DEFAULT_BASE_URL, fetchModelIds, fetchUsage, isPublicModelCatalog } from './opencode-api.js';
 import { withModelSelection } from './model-selection.js';
 import { withGoogleTransport } from './go-provider.js';
+import { assertHostCapabilities } from './host-capabilities.js';
 
 export const name = 'dsh-opencode-go-auth';
 export const inject = ['llm', 'connection'];
@@ -112,6 +113,7 @@ export function createOpencodeGoAdapter(ctx, config = {}, sourceOverride, before
 }
 
 export async function apply(ctx, config) {
+  assertHostCapabilities(ctx, name);
   const baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
   const timeoutMs = config.requestTimeoutMs ?? 20000;
   const bridge = new SystemProxyBridge({

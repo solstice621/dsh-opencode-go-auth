@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Remove host SDK version allowlists while retaining all peer dependencies.
+- Check required host service APIs before starting proxy, account, quota, or model-sync work.
+- Keep tested environments documented separately from activation requirements.
+
 ## 0.2.2-local.6 (local enhancement, not published)
 
 - Discover the official public Go catalog without requiring or sending an API key; keep authenticated usage and inference separate.
