@@ -1,7 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.2.2-local.7 (local fix, not published to npm)
 
+- Follow the current macOS HTTP/HTTPS proxy for each OpenCode request instead of permanently rejecting requests after a proxy change.
+- Keep in-flight requests on their original transport, retry proxy discovery after temporary failures, and clean up transports on unload.
+- Scope proxy dispatch to this plugin without changing process proxy variables or the Host's default dispatcher; retain explicit Host routing when system-proxy support is disabled.
+- Add real local-proxy switching and concurrency coverage alongside the bridge regression tests.
 - Remove host SDK version allowlists while retaining all peer dependencies.
 - Check required host service APIs before starting proxy, account, quota, or model-sync work.
 - Keep tested environments documented separately from activation requirements.

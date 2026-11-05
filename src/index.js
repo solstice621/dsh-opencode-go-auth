@@ -1,12 +1,12 @@
 import Schema from '@deepseek-ai/schemastery';
 import { PiAiAdapter } from '@deepseek-ai/dsh-llm-pi-ai';
 import { LlmError, resolveRetryPolicy, resolveImageAttachmentAccess } from '@deepseek-ai/dsh-llm';
-import { installProxyFromEnvironment, proxyEnvironmentForChild, proxyRouteFor } from '@deepseek-ai/dsh-http-proxy';
+import { proxyEnvironmentForChild } from '@deepseek-ai/dsh-http-proxy';
 import { clientRequestSchema } from '@deepseek-ai/dsh-client-connection';
 import { opencodeGoProvider } from '@earendil-works/pi-ai/providers/opencode-go';
 import { opencodeProvider } from '@earendil-works/pi-ai/providers/opencode';
 import { ApiKeySource, DEFAULT_API_KEY_ENV } from './api-key-source.js';
-import { SystemProxyBridge } from './system-proxy.js';
+import { SystemProxyBridge, withSystemProxy } from './system-proxy.js';
 import { AuthController, authRpcHandler } from './auth-controller.js';
 import { ModelSync, modelCacheStore } from './model-sync.js';
 import { quotaCacheFile, quotaCacheStore } from './quota-cache.js';
@@ -36,7 +36,7 @@ export const Config = Schema.object({
   quotaRefreshMinutes: Schema.number().min(1).max(1440).default(5).description('Automatically refresh quota data while Harness is running and this connection is enabled'),
   quotaCachePath: Schema.string().description('Optional last-usage cache path; defaults to ~/.dsh/cache/dsh-opencode-go-auth'),
   requestTimeoutMs: Schema.number().min(1000).max(120000).default(20000).description('Bound on one OpenCode Go request'),
-  useSystemProxy: Schema.boolean().default(process.platform === 'darwin').description('Use the active macOS HTTP proxy when the GUI Host has no explicit proxy'),
+  useSystemProxy: Schema.boolean().default(process.platform === 'darwin').description('Follow the current macOS HTTP/HTTPS proxy for OpenCode requests; disable to use the Host proxy'),
 });
 
 export function childEnvironment() {
@@ -118,8 +118,6 @@ export async function apply(ctx, config) {
   const timeoutMs = config.requestTimeoutMs ?? 20000;
   const bridge = new SystemProxyBridge({
     enabled: config.useSystemProxy ?? process.platform === 'darwin',
-    hostProxied: proxyRouteFor(`${baseUrl.replace(/\/$/, '')}/usage`).proxied,
-    install: installProxyFromEnvironment,
     report: message => ctx.logger.warn(message),
   });
   ctx.effect(() => () => bridge.dispose());
@@ -134,9 +132,9 @@ export async function apply(ctx, config) {
   const fallbackCatalog = opencodeProvider().getModels();
   let registration;
   const modelSync = new ModelSync({
-    source, enabled, beforeAuth: () => bridge.ensure(), baseline, fallbackCatalog, provider: PROVIDER,
+    source, enabled, baseline, fallbackCatalog, provider: PROVIDER,
     publicCatalog: isPublicModelCatalog(baseUrl),
-    fetchIds: options => fetchModelIds({ ...options, timeoutMs }),
+    fetchIds: options => bridge.run(signal => fetchModelIds({ ...options, timeoutMs, signal }), options.signal),
     intervalMinutes: config.modelRefreshMinutes ?? 360,
     ...(config.modelCachePath ? { store: modelCacheStore(config.modelCachePath) } : {}),
     onUpdate: () => registration?.replace?.([PROVIDER]),
@@ -144,10 +142,10 @@ export async function apply(ctx, config) {
   ctx.effect(() => () => modelSync.dispose());
 
   const controller = new AuthController({
-    source, enabled, beforeAuth: () => bridge.ensure(), modelSync,
+    source, enabled, modelSync,
     quotaStore: quotaCacheStore(config.quotaCachePath ?? quotaCacheFile(baseUrl)),
     showModelSync: config.showModelSync !== false,
-    fetchUsageImpl: options => fetchUsage({ ...options, timeoutMs }),
+    fetchUsageImpl: options => bridge.run(signal => fetchUsage({ ...options, timeoutMs, signal }), options.signal),
   });
   ctx.effect(() => () => controller.dispose());
   const quotaSync = new QuotaSync({ controller, intervalMinutes: config.quotaRefreshMinutes ?? 5 });
@@ -169,10 +167,9 @@ export async function apply(ctx, config) {
     });
   }
 
-  registration = ctx.llm.registerAdapter([PROVIDER], createOpencodeGoAdapter(ctx, config, source, async () => {
+  registration = ctx.llm.registerAdapter([PROVIDER], withSystemProxy(createOpencodeGoAdapter(ctx, config, source, async () => {
     if (!enabled()) throw new LlmError('OpenCode Go 连接已停用，请在设置 → OpenCode / Go 中启用。', 'OPENCODE_GO_CONNECTION_DISABLED');
-    await bridge.ensure();
-  }, () => modelSync.models));
+  }, () => modelSync.models), bridge));
   ctx.on('loader/volatile-update', () => registration?.replace?.([PROVIDER]));
 
   // Model discovery never delays startup or replaces a working catalog on error.

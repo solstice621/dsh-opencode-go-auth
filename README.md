@@ -23,7 +23,7 @@
 | 筛选模型 | 搜索并勾选会话中显示的模型，自动保存、即时生效，重启后保留 |
 | 补齐缺失模型 | 内置目录缺少的模型会从 Zen 目录借用元数据，或按保守设置补齐 |
 | 原生对话能力 | 复用 Harness adapter 的流式输出、工具调用、历史 replay 和图片处理 |
-| 系统代理 | macOS 上按当前系统 HTTP/HTTPS 代理运行，不修改系统设置 |
+| 系统代理 | 后续请求自动跟随当前 macOS HTTP/HTTPS 代理，进行中的请求保持原连接，不修改系统设置 |
 
 ## 兼容性与前提
 
@@ -142,9 +142,11 @@ Harness 运行且插件连接启用时，默认每 **5 分钟**读取额度，�
 | `quotaRefreshMinutes` | `5` | 后台额度刷新间隔，范围 1–1440 分钟；修改后重启 Harness |
 | `quotaCachePath` | `~/.dsh/cache/dsh-opencode-go-auth/<baseUrl-hash>/quota.json` | 上次成功的用量快照文件；按 API key 校验 |
 | `requestTimeoutMs` | `20000` | 额度与目录请求超时，范围 1000–120000 毫秒 |
-| `useSystemProxy` | macOS 为 `true` | Host 未显式配置代理时使用系统 HTTP/HTTPS 代理 |
+| `useSystemProxy` | macOS 为 `true` | OpenCode 请求跟随当前系统 HTTP/HTTPS 代理；关闭后沿用 Host 代理 |
 
 连接开关和模型显示选择即时生效；更换已保存的 key 也无需重启。修改其他插件配置后请重启 Harness。默认模型和额度缓存位置跟随 `DSH_HOME`。
+
+系统代理开启、切换或关闭后，下一次 OpenCode 模型、目录及额度请求自动使用新设置，无需重启。进行中的请求保持原连接；临时读取失败只拒绝当次请求，下次重试会重新读取。代理选择仅作用于本插件的异步请求，不修改进程代理环境变量或 Host 的默认 dispatcher。设为 `false` 时继续使用 Host 已配置的传输。
 
 ## 网络与权限
 
@@ -178,8 +180,13 @@ Harness 运行且插件连接启用时，默认每 **5 分钟**读取额度，�
 
 ```sh
 npm test
+npm run test:proxy
 npm pack --ignore-scripts
 ```
+
+`test:proxy` 使用本地 HTTP 代理验证真实连接；先用 `npm install --legacy-peer-deps` 安装开发依赖。宿主 SDK 由 Harness 提供，完整宿主验证需在对应 Harness 运行时执行。
+
+`0.2.2-local.7` 代理修复：107 项单元/回归测试，以及 2 项本地代理网络测试覆盖 A → B → 直连恢复、并发请求隔离、环境保留与卸载。代理机制已在 macOS + Harness Desktop `0.2.1-rc.5` + pi-ai `1.1.0` 验证真实 Gemini 4 Argon（High）对话、模型目录及额度请求；未切换用户的实际系统代理设置。
 
 当前实现的验证记录（插件 `0.2.2-local.6`，macOS + Harness `0.2.1-rc.3` + pi-ai `1.1.0`）：
 
