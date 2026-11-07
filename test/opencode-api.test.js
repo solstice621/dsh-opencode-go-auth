@@ -87,11 +87,16 @@ test('requestJson reports an unreachable host without leaking the key', async ()
   });
 });
 
-test('requestJson times out instead of hanging', async () => {
-  await assert.rejects(requestJson('usage', {
+test('requestJson times out instead of hanging', async t => {
+  // The production timer is unref'ed; advance it without relying on a real socket
+  // (the fake fetch has no event-loop handle to keep the process alive).
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const pending = assert.rejects(requestJson('usage', {
     apiKey: KEY, timeoutMs: 20,
     fetchImpl: (url, options) => new Promise((resolve, reject) => options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true })),
   }), error => error.code === 'OPENCODE_GO_TIMEOUT');
+  t.mock.timers.tick(20);
+  await pending;
 });
 
 test('requestJson refuses to send a key over plain HTTP or without one', async () => {

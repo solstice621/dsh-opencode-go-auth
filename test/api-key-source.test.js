@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { homedir } from 'node:os';
+import { resolve } from 'node:path';
 import { ApiKeySource, DEFAULT_API_KEY_ENV, OPENCODE_AUTH_PROVIDERS, defaultAuthFile, pickApiKeyFromAuth } from '../src/api-key-source.js';
 
 const KEY = 'oc_sk_0308a826449c_glgjvXswCEqZN73tZUvOY2UxVCRzb5Cz';
@@ -10,8 +12,8 @@ const source = options => new ApiKeySource({ env: {}, readAuthFile: async () => 
 test('the default reference matches the profile’s provider apiKeyEnv', () => {
   assert.equal(DEFAULT_API_KEY_ENV, 'OPENCODE_GO_API_KEY');
   assert.deepEqual(OPENCODE_AUTH_PROVIDERS, ['opencode-go', 'opencode']);
-  assert.match(defaultAuthFile({}), /opencode\/auth\.json$/);
-  assert.match(defaultAuthFile({ XDG_DATA_HOME: '/data' }), /^\/data\/opencode\/auth\.json$/);
+  assert.equal(defaultAuthFile({}), resolve(homedir(), '.local', 'share', 'opencode', 'auth.json'));
+  assert.equal(defaultAuthFile({ XDG_DATA_HOME: '/data' }), resolve('/data', 'opencode', 'auth.json'));
 });
 
 test('pickApiKeyFromAuth accepts only api entries and prefers the Go plan', () => {

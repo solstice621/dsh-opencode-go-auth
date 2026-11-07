@@ -60,9 +60,9 @@ function mount() {
     },
   });
   const remote = { state: displayState(), cached: sample(100, A, 10, true), quota: sample(200, A, 20), calls: [] };
-  const rpc = async method => {
+  const rpc = async (method, payload) => {
     remote.calls.push(method);
-    const value = typeof remote[method] === 'function' ? await remote[method]() : await remote[method];
+    const value = typeof remote[method] === 'function' ? await remote[method](payload) : await remote[method];
     if (value instanceof Error) return { ok: false, error: { code: 'OPENCODE_GO_UNREACHABLE', message: 'offline' } };
     return { ok: true, value };
   };
@@ -79,6 +79,8 @@ function mount() {
   };
   return {
     remote, render,
+    button: label => walk(tree).find(node => node.type === 'button' && node.children.includes(label)),
+    keyInput: () => walk(tree).find(node => node.type === 'input' && node.props.type === 'password'),
     quota: () => hooks[1],
     poll: async () => { for (const { callback } of [...timers.values()]) callback(); await flush(); render(); },
     refresh: async () => {
@@ -89,7 +91,92 @@ function mount() {
     timers,
   };
 }
-async function ready() { const page = mount(); page.render(); await flush(); page.render(); return page; }
+async function ready(state = displayState()) {
+  const page = mount();
+  page.remote.state = state;
+  page.render(); await flush(); page.render();
+  return page;
+}
+
+const unconfiguredState = () => ({
+  enabled: true, configured: false, connected: false, credential: null,
+  error: 'OPENCODE_GO_AUTH_REQUIRED', models: null, quotaSync: null,
+});
+
+test('first-time login opens the key input and submits to the login endpoint', async t => {
+  const page = await ready(unconfiguredState());
+  t.after(() => page.unmount());
+  assert.equal(page.button('登录 OpenCode Go').props.disabled, false);
+  assert.equal(page.keyInput(), undefined);
+  page.button('登录 OpenCode Go').props.onClick();
+  page.render();
+  assert(page.keyInput(), 'an unconfigured machine can open the API key input');
+  assert.equal(page.button('保存并验证').props.disabled, true, 'an empty key cannot be submitted');
+  page.keyInput().props.onChange({ target: { value: 'oc_sk_test_only' } });
+  page.render();
+  assert.equal(page.button('保存并验证').props.disabled, false);
+  page.remote.login = payload => {
+    assert.equal(payload.key, 'oc_sk_test_only');
+    return { ...displayState(), ...sample(300) };
+  };
+  await page.button('保存并验证').props.onClick();
+  await flush(); page.render();
+  assert.equal(page.remote.calls.filter(method => method === 'login').length, 1);
+  assert.equal(page.keyInput(), undefined, 'a successful login closes the input');
+  assert.equal(page.button('更换 API key').props.disabled, false);
+});
+
+test('login stays disabled while state is loading or could not be read', async t => {
+  const page = mount(), pending = deferred();
+  t.after(() => page.unmount());
+  page.remote.state = pending.promise;
+  page.render();
+  assert.equal(page.button('登录 OpenCode Go').props.disabled, true);
+  pending.resolve(new Error('offline'));
+  await flush(); page.render();
+  assert.equal(page.button('登录 OpenCode Go').props.disabled, true);
+  page.remote.state = unconfiguredState();
+  await page.button('重新读取状态').props.onClick();
+  await flush(); page.render();
+  assert.equal(page.button('登录 OpenCode Go').props.disabled, false, 'retry restores first-time login');
+});
+
+test('read-only credentials cannot be replaced or removed, but writable ones can', async t => {
+  for (const writable of [false, true, undefined]) {
+    const state = displayState();
+    if (writable === undefined) delete state.credential.writable;
+    else state.credential.writable = writable;
+    const page = await ready(state);
+    t.after(() => page.unmount());
+    assert.equal(page.button('更换 API key').props.disabled, !writable);
+    assert.equal(page.button('移除授权').props.disabled, !writable);
+    if (writable) {
+      page.button('更换 API key').props.onClick();
+      page.render();
+      assert(page.keyInput());
+    }
+  }
+});
+
+test('a pending login keeps login and save buttons disabled', async t => {
+  const page = await ready(unconfiguredState()), pending = deferred();
+  t.after(() => page.unmount());
+  assert.equal(page.button('登录 OpenCode Go').props.disabled, false);
+  page.button('登录 OpenCode Go').props.onClick();
+  page.render();
+  page.keyInput().props.onChange({ target: { value: 'oc_sk_test_only' } });
+  page.render();
+  page.remote.login = pending.promise;
+  const saving = page.button('保存并验证').props.onClick();
+  page.render();
+  assert.equal(page.button('登录 OpenCode Go').props.disabled, true);
+  assert.equal(page.button('正在验证…').props.disabled, true);
+  pending.resolve(new Error('offline'));
+  await saving; await flush(); page.render();
+  assert(page.keyInput(), 'a failed login leaves the input available for retry');
+  assert.equal(page.button('登录 OpenCode Go').props.disabled, false);
+  assert.equal(page.button('保存并验证').props.disabled, false);
+});
 
 test('a settings page left open observes a newer backend disk quota snapshot every 30 seconds', async () => {
   const page = await ready();

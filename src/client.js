@@ -239,7 +239,7 @@ window.__ModuleLoader__.load({
           state?.credential && h('p', { className: 'muted small' }, `来源：${sourceLabels(state.credential.source)}${state.verifiedAt ? ` · 最近验证 ${date(state.verifiedAt)}` : ''}`),
           state?.error && h('p', { className: 'small muted' }, errors[state.error] ?? '当前授权不可用，请重新登录。'),
           h('div', { className: 'buttons' },
-            h('button', { className: !state?.connected ? 'primary' : '', disabled: locked || !state?.credential?.writable, onClick: () => { setEditing(value => !value); setError(null); setNotice(null); } },
+            h('button', { className: !state?.connected ? 'primary' : '', disabled: locked || !state || Boolean(state.credential && !state.credential.writable), onClick: () => { setEditing(value => !value); setError(null); setNotice(null); } },
               state?.credential ? '更换 API key' : '登录 OpenCode Go'),
             state?.credential && h('button', { disabled: locked, onClick: () => operation('refresh') }, busy === 'refresh' ? '正在读取…' : '刷新额度'),
             state?.credential && h('button', { disabled: locked || !state?.credential?.writable, onClick: () => operation('logout') }, busy === 'logout' ? '正在移除…' : '移除授权'),

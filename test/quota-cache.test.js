@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { normalizeCachedWindows, quotaCacheFile, quotaCacheStore } from '../src/quota-cache.js';
 import { keyFingerprint } from '../src/opencode-api.js';
 
@@ -14,7 +14,10 @@ const windows = () => [
 ];
 
 test('the cache path follows DSH_HOME and the base URL', () => {
-  assert.match(quotaCacheFile('https://opencode.ai/zen/go/v1', { DSH_HOME: '/custom' }), /^\/custom\/cache\/dsh-opencode-go-auth\/[a-f0-9]{16}\/quota\.json$/);
+  const path = quotaCacheFile('https://opencode.ai/zen/go/v1', { DSH_HOME: '/custom' });
+  assert.equal(dirname(dirname(path)), resolve('/custom', 'cache', 'dsh-opencode-go-auth'));
+  assert.match(basename(dirname(path)), /^[a-f0-9]{16}$/);
+  assert.equal(basename(path), 'quota.json');
   assert.notEqual(quotaCacheFile('https://a', {}), quotaCacheFile('https://b', {}));
 });
 
