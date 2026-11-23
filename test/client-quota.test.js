@@ -47,6 +47,8 @@ test('the composer shows the Go quota button for either Go provider', () => {
     const pill = slot.component(props);
     const button = pill.type(pill.props).children[0];
     assert.equal(button.props['data-auth-plan-usage'], 'dsh-opencode-go-auth');
+    assert.equal(Object.hasOwn(button.props, 'data-composer-stat'), false,
+      'themes may hide every built-in composer statistic');
     assert.equal(button.props['aria-haspopup'], 'dialog');
   }
   provider = 'another-provider';
