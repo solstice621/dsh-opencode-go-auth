@@ -52,6 +52,7 @@ function mount(ids = null) {
   };
   vm.runInNewContext(CLIENT, { window: { __ModuleLoader__: { load: value => { registration = value; } } } });
   registration.factory(() => React).apply({
+    inject() {}, // This fixture mounts settings; composer uses a separate service scope.
     effect() {},
     slots: { inject: (_name, callback) => callback(), register: (_options, page) => { AuthPage = page; } },
   });

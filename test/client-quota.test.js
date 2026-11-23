@@ -21,6 +21,38 @@ const deferred = () => {
 };
 const flush = async () => { for (let i = 0; i < 40; i++) await Promise.resolve(); };
 
+test('the composer shows the Go quota button for either Go provider', () => {
+  let registration, slot, provider;
+  const directory = { getSnapshot: () => ({ current: { provider } }) };
+  const scope = {
+    effect() {},
+    modelDirectories: { directoryFor: () => ({ store: directory }) },
+    slots: {
+      inject: (_name, mount) => mount(),
+      register: (options, component) => {
+        if (options.name === 'conversation.composer.dock') slot = { options, component };
+      },
+    },
+  };
+  const React = {
+    createElement: (type, props, ...children) => ({ type, props, children }),
+    useSyncExternalStore: (_subscribe, read) => read(),
+    useState: initial => [initial, () => {}],
+  };
+  vm.runInNewContext(CLIENT, { window: { __ModuleLoader__: { load: value => { registration = value; } } } });
+  registration.factory(name => name === 'react' ? React : {}).apply({ ...scope, inject: (_services, mount) => mount(scope) });
+  assert.equal(slot.options.id, 'dsh-opencode-go-auth-quota');
+  const props = slot.options.inject('session');
+  for (provider of ['opencode-go-subscription', 'opencode-go']) {
+    const pill = slot.component(props);
+    const button = pill.type(pill.props).children[0];
+    assert.equal(button.props['data-auth-plan-usage'], 'dsh-opencode-go-auth');
+    assert.equal(button.props['aria-haspopup'], 'dialog');
+  }
+  provider = 'another-provider';
+  assert.equal(slot.component(props), null);
+});
+
 /** Minimal deterministic hook/timer host: executes the actual shipped client, no React install or DOM. */
 function mount() {
   let registration, Component, cursor = 0, tree;
@@ -53,6 +85,7 @@ function mount() {
   };
   vm.runInNewContext(CLIENT, { window });
   registration.factory(name => { assert.equal(name, 'react'); return React; }).apply({
+    inject() {}, // This fixture mounts settings; composer uses a separate service scope.
     effect() {}, // Style effect does not matter for quota state or polling.
     slots: {
       inject: (_name, callback) => callback(),

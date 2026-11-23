@@ -1,0 +1,34 @@
+name: Test packed plugin
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        undici: ['8.11.2', '8.12.3']
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Run the suite against the tarball
+        env:
+          UNDICI_VERSION: ${{ matrix.undici }}
+        run: |
+          stage=$(mktemp -d)
+          archive=$(npm pack --silent --ignore-scripts --pack-destination "$stage")
+          tar -xzf "$stage/$archive" -C "$stage"
+          cp -R test "$stage/package/"
+          npm install --prefix "$stage" --no-save --ignore-scripts "undici@$UNDICI_VERSION"
+          cd "$stage/package"
+          node -e "require('node:assert/strict').equal(require('undici/package.json').version, process.env.UNDICI_VERSION)"
+          npm test

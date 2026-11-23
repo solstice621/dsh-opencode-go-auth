@@ -23,11 +23,12 @@
 | 筛选模型 | 搜索并勾选会话中显示的模型，自动保存、即时生效，重启后保留 |
 | 补齐缺失模型 | 内置目录缺少的模型会从 Zen 目录借用元数据，或按保守设置补齐 |
 | 原生对话能力 | 复用 Harness adapter 的流式输出、工具调用、历史 replay 和图片处理 |
-| 系统代理 | macOS 上按当前系统 HTTP/HTTPS 代理运行，不修改系统设置 |
+| 系统代理 | 新请求自动跟随当前 macOS HTTP/HTTPS 代理，正在进行的请求沿用原连接 |
 
 ## 兼容性与前提
 
-- 当前验证环境：**macOS + DeepSeek Harness Desktop `0.2.1-rc.3` + pi-ai `1.1.0`**，包含授权、额度读取、桌面模型勾选及实际对话。此前也在 Harness `0.2.0-rc.2` / `0.2.1-rc.2` 验证过。
+- `v0.2.2` 的目标环境为 macOS、DeepSeek Harness Desktop `0.2.2-rc.5` 和 pi-ai `1.3.0`。代理传输支持 Undici `8.11.2` 和 `8.12.3`。
+- 早期版本在 Harness `0.2.1-rc.3` 和 pi-ai `1.1.0` 上验证过授权、额度读取、桌面模型勾选及实际对话。
 - 另通过 Harness SDK `0.2.1-rc.5` + pi-ai `1.4.0` 的自动化检查：插件导入、缺失接口报错和原生适配器模型枚举；未发送模型请求。
 - 插件及 DSH SDK peer 的最低版本为 `0.2.2-rc.2`，使用宿主提供的 SDK。启动前检查原生适配器注册和认证 Fetch 接口，缺少接口会明确报错。以上是实测环境，其他版本仍需验证。
 - 需要 **OpenCode Go 或 Go Plus 订阅**及对应 API key，在 [opencode.ai/auth](https://opencode.ai/auth) 订阅后复制。
@@ -38,14 +39,14 @@
 
 ## 安装到桌面版
 
-以下从 `main` 安装，包含上述 Harness 兼容性修复、授权与模型同步修复，以及模型勾选功能。如需固定版本，可将地址中的 `main` 换成已确认的提交 SHA。
+以下安装固定版本 `v0.2.2`，包含代理热切换和会话输入框的 Go 额度控件。也可以从 [GitHub Release](https://github.com/solstice621/dsh-opencode-go-auth/releases/tag/v0.2.2) 下载同版本安装包。
 
 1. 取得 OpenCode Go API key（[opencode.ai/auth](https://opencode.ai/auth) → 订阅 Go / Go Plus → 复制 key）。
 2. 在 Harness 左侧打开「插件」→「添加插件」。
 3. 输入以下 GitHub 包地址：
 
    ```text
-   github:solstice621/dsh-opencode-go-auth#main
+   github:solstice621/dsh-opencode-go-auth#v0.2.2
    ```
 
 4. 安装并启用插件，然后完全退出并重新打开 Harness。
@@ -142,12 +143,13 @@ Harness 运行且插件连接启用时，默认每 **5 分钟**读取额度，�
 | `quotaRefreshMinutes` | `5` | 后台额度刷新间隔，范围 1–1440 分钟；修改后重启 Harness |
 | `quotaCachePath` | `~/.dsh/cache/dsh-opencode-go-auth/<baseUrl-hash>/quota.json` | 上次成功的用量快照文件；按 API key 校验 |
 | `requestTimeoutMs` | `20000` | 额度与目录请求超时，范围 1000–120000 毫秒 |
-| `useSystemProxy` | macOS 为 `true` | Host 未显式配置代理时使用系统 HTTP/HTTPS 代理 |
+| `useSystemProxy` | macOS 为 `true` | OpenCode 请求跟随系统 HTTP/HTTPS 代理。关闭此选项后沿用 Harness 的网络配置 |
 
 连接开关和模型显示选择即时生效；更换已保存的 key 也无需重启。修改其他插件配置后请重启 Harness。默认模型和额度缓存位置跟随 `DSH_HOME`。
 
 ## 网络与权限
 
+- 切换、开启或关闭 macOS 静态代理后，下一次模型、额度或目录请求会读取当前设置。进行中的流继续使用原连接。临时读取失败时可直接重试。
 - 默认连接访问 `https://opencode.ai`：`/zen/go/v1/usage`（额度）与 `/zen/go/v1/models`（公开模型目录）；模型请求由原生传输层按各模型协议发往 OpenCode 的 Go 端点。自定义 `baseUrl` 会改变请求目标。
 - 需要授权的请求通过对应协议的请求头传递 key；公开模型目录请求不携带 key。日志、错误信息和后端返回的展示数据不包含完整 key。
 - 读取 `authFile`，通过 Harness 凭据服务保存或移除 key，并读写本地模型目录及用量快照。
@@ -177,11 +179,14 @@ Harness 运行且插件连接启用时，默认每 **5 分钟**读取额度，�
 ## 验证与开发
 
 ```sh
+npm install --ignore-scripts --legacy-peer-deps
 npm test
 npm pack --ignore-scripts
 ```
 
-当前实现的验证记录（插件 `0.2.2-local.6`，macOS + Harness `0.2.1-rc.3` + pi-ai `1.1.0`）：
+`npm test` 包含本地代理切换、并发流和恢复测试。CI 从打包后的 `.tgz` 运行同一套测试，覆盖 Undici 8.11.2 和 8.12.3。
+
+历史验证记录（插件 `0.2.2-local.6`，macOS + Harness `0.2.1-rc.3` + pi-ai `1.1.0`）：
 
 - **99 项测试通过**：覆盖凭据解析、登录校验、公开目录同步、缓存恢复与隔离、后台额度刷新、模型筛选和保存失败恢复、原生传输兼容及清理。
 - **原生适配器通过**：模型列表筛选、隐藏模型的精确查询、已准备请求和配置 schema 均通过验证。
@@ -192,7 +197,9 @@ npm pack --ignore-scripts
 
 A native OpenCode Go / Go Plus subscription plugin for DeepSeek Harness Desktop. Save your API key in the Harness credential store, view usage windows, and refresh quota and model data in the background. The official model catalog is public; inference and usage reads require valid Go credentials.
 
-Install from `github:solstice621/dsh-opencode-go-auth#main` for the current compatibility, authorization, sync, and model-selection updates. Search and check models in **Settings → OpenCode / Go → 模型显示**; changes apply immediately and persist across restarts. Reset to defaults to include future models automatically; a custom selection or Select all requires selecting newly discovered models manually. The current integration was verified on macOS with Harness `0.2.1-rc.3` and pi-ai `1.1.0`. The bundle and its DSH SDK peers require `>=0.2.2-rc.2`. Activation checks required host service APIs; module imports still require the SDK exports used by the adapter. This independent community plugin is not an official OpenCode / Anomaly product.
+Install `github:solstice621/dsh-opencode-go-auth#v0.2.2` or the tarball from the matching GitHub release. On macOS, new requests pick up changes to the system HTTP/HTTPS proxy. Active streams finish on their original connection. The chat composer displays Go quota for the selected Go provider.
+
+Search and check models in **Settings → OpenCode / Go → 模型显示**. Selection changes apply immediately and persist across restarts. Reset to defaults to include future models automatically. A custom selection or Select all requires selecting newly discovered models manually. The bundle and its DSH SDK peers require `>=0.2.2-rc.2` and use the host's adapter and authentication APIs.
 
 ## License
 
