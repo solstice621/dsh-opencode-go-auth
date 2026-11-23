@@ -53,6 +53,7 @@ function mount() {
   };
   vm.runInNewContext(CLIENT, { window });
   registration.factory(name => { assert.equal(name, 'react'); return React; }).apply({
+    inject() {}, // This fixture mounts settings; composer uses a separate service scope.
     effect() {}, // Style effect does not matter for quota state or polling.
     slots: {
       inject: (_name, callback) => callback(),
