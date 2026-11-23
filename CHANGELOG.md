@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.3
+
+- Keep the Go quota button visible with composer themes that collapse built-in statistics. Declare the conversation dock and model selection client packages used by the control.
+
 ## 0.2.2
 
 - Follow the current macOS HTTP/HTTPS proxy for model streams, quota reads and catalog refreshes. Active streams keep their connection until they finish. A temporary failure to read proxy settings can be retried on the next request.

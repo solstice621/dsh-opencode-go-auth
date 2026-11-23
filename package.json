@@ -1,6 +1,6 @@
 {
   "name": "dsh-opencode-go-auth",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "OpenCode Go subscription auth for DeepSeek Harness Desktop, with native account and usage UI",
   "type": "module",
   "license": "MIT",
@@ -73,6 +73,8 @@
       "inject": [
         "@deepseek-ai/dsh-client-connection",
         "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-model-selection",
         "@deepseek-ai/dsh-client-ui-settings",
         "@deepseek-ai/dsh-client-ui-settings-general"
       ]

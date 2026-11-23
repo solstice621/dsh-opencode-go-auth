@@ -466,7 +466,7 @@ window.__ModuleLoader__.load({
       const windows = quotaWindows(source, data.quota);
       const stale = data.quota && staleQuota(data.quota, windows);
       return h(React.Fragment, null,
-        h('button', { type: 'button', className: 'dsh-opencode-plan-pill', 'data-composer-stat': 'plan', 'data-auth-plan-usage': 'dsh-opencode-go-auth',
+        h('button', { type: 'button', className: 'dsh-opencode-plan-pill', 'data-auth-plan-usage': 'dsh-opencode-go-auth',
           'aria-label': '查看' + source.label + '套餐额度', 'aria-haspopup': 'dialog', 'aria-expanded': open,
           title: source.label + ' · 当前已连接账号的可用比例 · ' + (data.error || (data.quota ? '上次更新：' + stamp(data.quota.fetchedAt) : statusText(data))), onClick: () => setOpen(true) },
           windows.length ? windows.flatMap((value, i) => [

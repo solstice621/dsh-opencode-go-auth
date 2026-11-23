@@ -27,7 +27,7 @@
 
 ## 兼容性与前提
 
-- `v0.2.2` 的目标环境为 macOS、DeepSeek Harness Desktop `0.2.2-rc.5` 和 pi-ai `1.3.0`。代理传输支持 Undici `8.11.2` 和 `8.12.3`。
+- `v0.2.3` 的目标环境为 macOS、DeepSeek Harness Desktop `0.2.2-rc.5` 和 pi-ai `1.3.0`。代理传输支持 Undici `8.11.2` 和 `8.12.3`。
 - 早期版本在 Harness `0.2.1-rc.3` 和 pi-ai `1.1.0` 上验证过授权、额度读取、桌面模型勾选及实际对话。
 - 另通过 Harness SDK `0.2.1-rc.5` + pi-ai `1.4.0` 的自动化检查：插件导入、缺失接口报错和原生适配器模型枚举；未发送模型请求。
 - 插件及 DSH SDK peer 的最低版本为 `0.2.2-rc.2`，使用宿主提供的 SDK。启动前检查原生适配器注册和认证 Fetch 接口，缺少接口会明确报错。以上是实测环境，其他版本仍需验证。
@@ -39,14 +39,14 @@
 
 ## 安装到桌面版
 
-以下安装固定版本 `v0.2.2`，包含代理热切换和会话输入框的 Go 额度控件。也可以从 [GitHub Release](https://github.com/solstice621/dsh-opencode-go-auth/releases/tag/v0.2.2) 下载同版本安装包。
+以下安装固定版本 `v0.2.3`，包含代理热切换和会话输入框的 Go 额度控件。也可以从 [GitHub Release](https://github.com/solstice621/dsh-opencode-go-auth/releases/tag/v0.2.3) 下载同版本安装包。
 
 1. 取得 OpenCode Go API key（[opencode.ai/auth](https://opencode.ai/auth) → 订阅 Go / Go Plus → 复制 key）。
 2. 在 Harness 左侧打开「插件」→「添加插件」。
 3. 输入以下 GitHub 包地址：
 
    ```text
-   github:solstice621/dsh-opencode-go-auth#v0.2.2
+   github:solstice621/dsh-opencode-go-auth#v0.2.3
    ```
 
 4. 安装并启用插件，然后完全退出并重新打开 Harness。
@@ -197,7 +197,7 @@ npm pack --ignore-scripts
 
 A native OpenCode Go / Go Plus subscription plugin for DeepSeek Harness Desktop. Save your API key in the Harness credential store, view usage windows, and refresh quota and model data in the background. The official model catalog is public; inference and usage reads require valid Go credentials.
 
-Install `github:solstice621/dsh-opencode-go-auth#v0.2.2` or the tarball from the matching GitHub release. On macOS, new requests pick up changes to the system HTTP/HTTPS proxy. Active streams finish on their original connection. The chat composer displays Go quota for the selected Go provider.
+Install `github:solstice621/dsh-opencode-go-auth#v0.2.3` or the tarball from the matching GitHub release. On macOS, new requests pick up changes to the system HTTP/HTTPS proxy. Active streams finish on their original connection. The chat composer displays Go quota for the selected Go provider.
 
 Search and check models in **Settings → OpenCode / Go → 模型显示**. Selection changes apply immediately and persist across restarts. Reset to defaults to include future models automatically. A custom selection or Select all requires selecting newly discovered models manually. The bundle and its DSH SDK peers require `>=0.2.2-rc.2` and use the host's adapter and authentication APIs.
 
