@@ -37,10 +37,9 @@ window.__ModuleLoader__.load({
       OPENCODE_GO_KEY_CHANGED: 'API key 已变化，请重新同步模型。',
       OPENCODE_GO_MODEL_SYNC_FAILED: '模型同步失败，已保留当前目录。',
       OPENCODE_GO_CONNECTION_DISABLED: '请先启用 OpenCode Go 连接。',
-      SYSTEM_PROXY_CHANGED: '系统代理已切换，请重启 Harness 后继续。',
       SYSTEM_PROXY_UNSUPPORTED: '系统代理仅支持静态 HTTP/HTTPS 设置，PAC 或 SOCKS 暂不支持。',
       SYSTEM_PROXY_INVALID: '系统代理设置无效，请检查 macOS 代理。',
-      SYSTEM_PROXY_UNAVAILABLE: '无法读取 macOS 系统代理，请重启 Harness 或关闭 useSystemProxy。',
+      SYSTEM_PROXY_UNAVAILABLE: '无法读取 macOS 系统代理，请检查网络设置后重试。',
     };
     const sourceLabels = source => {
       if (!source) return '未知来源';
@@ -276,7 +275,7 @@ window.__ModuleLoader__.load({
           h('p', { className: 'small muted', style: { marginTop: 8 } }, '目录接口只返回模型 ID；已知模型沿用官方元数据，新增模型改用保守的上下文与协议设置。'),
         ),
         h(ModelSelection, { models: state?.models?.availableModels, form, formState }),
-        h('p', { className: 'footer' }, '使用时，在会话模型选择器中选择「OpenCode · Go 额度」。系统代理切换后需要重启 Harness。'));
+        h('p', { className: 'footer' }, '在会话模型选择器中选择「OpenCode · Go 额度」。启用系统代理跟随后，新请求会自动使用当前代理。'));
     }
 
     // This plugin owns its account quota UI and reads only its own RPC endpoints.

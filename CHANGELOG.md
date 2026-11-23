@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.2.2
+
+- Follow the current macOS HTTP/HTTPS proxy for model streams, quota reads and catalog refreshes. Active streams keep their connection until they finish. A temporary failure to read proxy settings can be retried on the next request.
+- Preserve the OpenCode Go quota controls in the chat composer and first-time API key login.
+- Test the packed plugin against Undici 8.11.2 and 8.12.3, including concurrent requests during proxy changes.
 
 - Remove host SDK version allowlists while retaining all peer dependencies.
 - Check required host service APIs before starting proxy, account, quota, or model-sync work.

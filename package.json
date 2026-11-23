@@ -1,6 +1,6 @@
 {
   "name": "dsh-opencode-go-auth",
-  "version": "0.2.2-local.10",
+  "version": "0.2.2",
   "description": "OpenCode Go subscription auth for DeepSeek Harness Desktop, with native account and usage UI",
   "type": "module",
   "license": "MIT",
@@ -39,7 +39,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "test:proxy": "node --test test/system-proxy.test.js test/proxy-transport.test.js"
   },
   "engines": {
     "node": ">=22.19.0",
@@ -52,7 +53,11 @@
     "@deepseek-ai/dsh-llm-pi-ai": ">=0.2.2-rc.2",
     "@deepseek-ai/dsh-http-proxy": ">=0.2.2-rc.2",
     "@deepseek-ai/dsh-client-connection": ">=0.2.2-rc.2",
-    "@earendil-works/pi-ai": "*"
+    "@earendil-works/pi-ai": "*",
+    "undici": "8.11.2 || 8.12.3"
+  },
+  "devDependencies": {
+    "undici": "8.11.2"
   },
   "dsh": {
     "bundle": {
